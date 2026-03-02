@@ -748,6 +748,9 @@ export default function TimetablePage({ user, onLogout, theme, onThemeChange, is
   const [statsHidden, setStatsHidden] = useState(
     () => localStorage.getItem('stats_hidden') === '1'
   );
+  const [extraHours, setExtraHours] = useState(
+  () => parseInt(localStorage.getItem('extra_hours') || '0')
+  );
   const fileInputRef = useRef(null);
 
   const showToast = (msg, type = 'ok') => {
@@ -944,7 +947,9 @@ export default function TimetablePage({ user, onLogout, theme, onThemeChange, is
   );
 
   const allHours = Array.from({ length: settings?.hoursPerDay || 6 }, (_, i) => i + 1);
-  const hours = allHours.filter(h => !hiddenHours.includes(h));
+  const maxHour = Math.min((settings?.hoursPerDay || 6) + extraHours, 10);
+  const allHoursExtended = Array.from({ length: maxHour }, (_, i) => i + 1);
+  const hours = allHoursExtended.filter(h => !hiddenHours.includes(h));
   const days = settings?.schoolDays || [];
   const filledSlots = slots.filter(s => s.subject && s.subject.trim() !== '' && s.slot_type !== 'free');
 
@@ -1150,6 +1155,67 @@ export default function TimetablePage({ user, onLogout, theme, onThemeChange, is
           </div>
         </div>
       )}
+
+      {/* Controllo ore extra */}
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        gap: 12, marginTop: 12, paddingBottom: 100
+      }}>
+        {extraHours > 0 && (
+          <button
+            onClick={() => {
+              const v = extraHours - 1;
+              setExtraHours(v);
+              localStorage.setItem('extra_hours', v);
+            }}
+            style={{
+              background: 'var(--bg2)', border: '1px solid var(--border)',
+              borderRadius: 6, padding: '6px 16px', fontSize: 18,
+              color: 'var(--text2)', cursor: 'pointer', lineHeight: 1,
+              fontFamily: 'var(--mono)'
+            }}>
+            −
+          </button>
+        )}
+
+        <span style={{
+          fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--text3)',
+          letterSpacing: '0.08em'
+        }}>
+          {maxHour} ORE
+          {extraHours > 0 && (
+            <span style={{ color: 'var(--primary)', marginLeft: 6 }}>
+              +{extraHours} extra
+            </span>
+          )}
+        </span>
+
+        {maxHour < 10 && (
+          <button
+            onClick={() => {
+              const v = extraHours + 1;
+              setExtraHours(v);
+              localStorage.setItem('extra_hours', v);
+            }}
+            style={{
+              background: 'var(--primary)', border: 'none',
+              borderRadius: 6, padding: '6px 16px', fontSize: 18,
+              color: 'white', cursor: 'pointer', lineHeight: 1,
+              fontFamily: 'var(--mono)'
+            }}>
+            +
+          </button>
+        )}
+
+        {maxHour >= 10 && (
+          <span style={{
+            fontFamily: 'var(--mono)', fontSize: 10,
+            color: 'var(--text3)', letterSpacing: '0.06em'
+          }}>
+            MAX 10
+          </span>
+        )}
+      </div>
 
       <ClockWidget />
 
