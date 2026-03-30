@@ -314,24 +314,25 @@ router.delete('/share', async (req, res) => {
 // --- EXPORT / IMPORT ---
 router.get('/export', async (req, res) => {
   try {
-    const [sR, slR, nR, subR] = await Promise.all([
+    const [sR, slR, nR, subR, vacR] = await Promise.all([
       pool.query('SELECT * FROM user_settings WHERE user_id=$1', [req.user.id]),
       pool.query('SELECT day, hour, subject, color, slot_type FROM slots WHERE user_id=$1', [req.user.id]),
       pool.query('SELECT day, hour, content, note_date FROM notes WHERE user_id=$1', [req.user.id]),
-      pool.query('SELECT day, hour, hour_to, substitute, sub_date, note FROM substitutions WHERE user_id=$1', [req.user.id])
+      pool.query('SELECT day, hour, hour_to, substitute, sub_date, note FROM substitutions WHERE user_id=$1', [req.user.id]),
+      pool.query('SELECT name, start_date, end_date, color FROM vacations WHERE user_id=$1 ORDER BY start_date', [req.user.id])
     ]);
     const s = sR.rows[0];
     res.json({
       version: 3,
       exportedAt: new Date().toISOString(),
       settings: { schoolDays: JSON.parse(s?.school_days || '[]'), hoursPerDay: s?.hours_per_day || 6 },
-      slots: slR.rows, notes: nR.rows, substitutions: subR.rows
+      slots: slR.rows, notes: nR.rows, substitutions: subR.rows, vacations: vacR.rows
     });
   } catch (e) { res.status(500).json({ error: 'Errore export' }); }
 });
 
 router.post('/import', async (req, res) => {
-  const { settings, slots, notes, substitutions } = req.body;
+  const { settings, slots, notes, substitutions, vacations } = req.body;
   if (!settings || !Array.isArray(slots) || !Array.isArray(notes) || !Array.isArray(substitutions))
     return res.status(400).json({ error: 'Formato non valido' });
   const client = await pool.connect();
@@ -342,7 +343,7 @@ router.post('/import', async (req, res) => {
     await client.query('DELETE FROM slots WHERE user_id=$1', [req.user.id]);
     await client.query('DELETE FROM notes WHERE user_id=$1', [req.user.id]);
     await client.query('DELETE FROM substitutions WHERE user_id=$1', [req.user.id]);
-    // Nota: le vacazioni NON vengono importate - rimangono quelle existing
+    await client.query('DELETE FROM vacations WHERE user_id=$1', [req.user.id]);
     for (const s of slots)
       await client.query('INSERT INTO slots (user_id,day,hour,subject,color,slot_type) VALUES ($1,$2,$3,$4,$5,$6)',
         [req.user.id, s.day, s.hour, s.subject, s.color, s.slot_type || 'subject']);
@@ -352,6 +353,11 @@ router.post('/import', async (req, res) => {
     for (const s of substitutions)
       await client.query('INSERT INTO substitutions (user_id,day,hour,hour_to,substitute,sub_date,note) VALUES ($1,$2,$3,$4,$5,$6,$7)',
         [req.user.id, s.day, s.hour, s.hour_to || s.hour, s.substitute, s.sub_date, s.note || '']);
+    if (Array.isArray(vacations)) {
+      for (const v of vacations)
+        await client.query('INSERT INTO vacations (user_id,name,start_date,end_date,color) VALUES ($1,$2,$3,$4,$5)',
+          [req.user.id, v.name, v.start_date, v.end_date, v.color || '#7c3aed']);
+    }
     await client.query('COMMIT');
     res.json({ ok: true });
   } catch (e) {
