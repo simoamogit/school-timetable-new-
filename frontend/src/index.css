@@ -251,3 +251,18 @@ button {
   .form-row { flex-direction: column; gap: 0; }
   .tabs .tab { padding: 10px 8px; font-size: 12px; }
 }
+
+/* Vacation styles */
+:root {
+  --vacation: #7c3aed;
+  --vacation-bg: rgba(124, 58, 237, 0.08);
+}
+
+[data-theme="dark"] {
+  --vacation-bg: rgba(124, 58, 237, 0.12);
+}
+
+.cell-vacation {
+  opacity: 0.65;
+  pointer-events: none;
+}

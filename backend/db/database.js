@@ -2,7 +2,7 @@ const { Pool } = require('pg');
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false },
+  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
   family: 4
 });
 
@@ -76,6 +76,7 @@ async function initDB() {
       `ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS hidden_hours TEXT DEFAULT '[]'`,
       `ALTER TABLE slots ADD COLUMN IF NOT EXISTS slot_type TEXT DEFAULT 'subject'`,
       `UPDATE substitutions SET hour_to = hour WHERE hour_to IS NULL`,
+      `CREATE TABLE IF NOT EXISTS vacations (id SERIAL PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id), name TEXT NOT NULL, start_date TEXT NOT NULL, end_date TEXT NOT NULL, color TEXT DEFAULT '#7c3aed', created_at TIMESTAMPTZ DEFAULT NOW())`,
     ];
     for (const m of migrations) {
       try { await client.query(m); } catch (_) { /* già presente */ }

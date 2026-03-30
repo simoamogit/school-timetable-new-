@@ -28,36 +28,6 @@ async function cleanupExpired(userId) {
 
 router.get('/health', (req, res) => res.json({ ok: true, ts: Date.now() }));
 
-// Visualizzazione orario condiviso
-router.get('/view/:token', async (req, res) => {
-  try {
-    const tRes = await pool.query('SELECT user_id FROM share_tokens WHERE token=$1', [req.params.token]);
-    if (!tRes.rows.length) return res.status(404).json({ error: 'Link non valido o scaduto' });
-
-    const userId = tRes.rows[0].user_id;
-    const [sR, slR, nR, subR, uR] = await Promise.all([
-      pool.query('SELECT * FROM user_settings WHERE user_id=$1', [userId]),
-      pool.query('SELECT * FROM slots WHERE user_id=$1', [userId]),
-      pool.query('SELECT * FROM notes WHERE user_id=$1', [userId]),
-      pool.query('SELECT * FROM substitutions WHERE user_id=$1', [userId]),
-      pool.query('SELECT username FROM users WHERE id=$1', [userId])
-    ]);
-    const s = sR.rows[0];
-    res.json({
-      username: uR.rows[0]?.username,
-      avatarColor: s?.avatar_color || '#2563eb',
-      settings: {
-        schoolDays: JSON.parse(s?.school_days || '[]'),
-        hoursPerDay: s?.hours_per_day || 6,
-        hiddenHours: JSON.parse(s?.hidden_hours || '[]'),
-      },
-      slots: slR.rows,
-      notes: nR.rows,
-      substitutions: subR.rows
-    });
-  } catch (e) { console.error(e); res.status(500).json({ error: 'Errore server' }); }
-});
-
 // =====================
 // ROTTE PROTETTE
 // =====================
@@ -409,6 +379,45 @@ router.put('/substitutions/:id', async (req, res) => {
       'UPDATE substitutions SET substitute=$1, hour=$2, hour_to=$3, sub_date=$4, note=$5 WHERE id=$6 AND user_id=$7',
       [substitute, hour, hour_to || hour, sub_date, note || '', req.params.id, req.user.id]
     );
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: 'Errore server' }); }
+});
+
+// --- VACATIONS ---
+router.get('/vacations', async (req, res) => {
+  try {
+    const r = await pool.query('SELECT * FROM vacations WHERE user_id=$1 ORDER BY start_date', [req.user.id]);
+    res.json(r.rows);
+  } catch (e) { res.status(500).json({ error: 'Errore server' }); }
+});
+
+router.post('/vacations', async (req, res) => {
+  const { name, start_date, end_date, color } = req.body;
+  if (!name || !start_date || !end_date) return res.status(400).json({ error: 'Dati mancanti' });
+  try {
+    const r = await pool.query(
+      'INSERT INTO vacations (user_id, name, start_date, end_date, color) VALUES ($1,$2,$3,$4,$5) RETURNING id',
+      [req.user.id, name, start_date, end_date, color || '#7c3aed']
+    );
+    res.json({ id: r.rows[0].id });
+  } catch (e) { res.status(500).json({ error: 'Errore server' }); }
+});
+
+router.put('/vacations/:id', async (req, res) => {
+  const { name, start_date, end_date, color } = req.body;
+  if (!name || !start_date || !end_date) return res.status(400).json({ error: 'Dati mancanti' });
+  try {
+    await pool.query(
+      'UPDATE vacations SET name=$1, start_date=$2, end_date=$3, color=$4 WHERE id=$5 AND user_id=$6',
+      [name, start_date, end_date, color, req.params.id, req.user.id]
+    );
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: 'Errore server' }); }
+});
+
+router.delete('/vacations/:id', async (req, res) => {
+  try {
+    await pool.query('DELETE FROM vacations WHERE id=$1 AND user_id=$2', [req.params.id, req.user.id]);
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: 'Errore server' }); }
 });

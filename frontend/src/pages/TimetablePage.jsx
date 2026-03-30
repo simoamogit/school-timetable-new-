@@ -1,42 +1,68 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import api from '../api/index.js';
 import TodayView from './TodayView.jsx';
 
+function getWeekDates() {
+  const today = new Date();
+  const dow = today.getDay();
+  // Calculate days until Monday (1 = Monday)
+  const daysToMonday = dow === 0 ? 6 : dow - 1;
+  const monday = new Date(today);
+  monday.setDate(today.getDate() - daysToMonday);
+  
+  const dateToString = (d) => {
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+  
+  return {
+    'Lunedì': dateToString(monday),
+    'Martedì': dateToString(new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + 1)),
+    'Mercoledì': dateToString(new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + 2)),
+    'Giovedì': dateToString(new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + 3)),
+    'Venerdì': dateToString(new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + 4)),
+    'Sabato': dateToString(new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + 5)),
+    'Domenica': dateToString(new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + 6)),
+  };
+}
+
 const PRESET_COLORS = [
-  '#2563eb','#7c3aed','#db2777','#dc2626',
-  '#ea580c','#ca8a04','#16a34a','#0d9488',
-  '#0891b2','#475569'
+  '#2563eb', '#7c3aed', '#db2777', '#dc2626',
+  '#ea580c', '#ca8a04', '#16a34a', '#0d9488',
+  '#0891b2', '#475569'
 ];
 
 // ─── SVG Icons ────────────────────────────────────────────────────────────────
 const GearIcon = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
     strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="12" cy="12" r="3"/>
-    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+    <circle cx="12" cy="12" r="3" />
+    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
   </svg>
 );
 
 const PencilIcon = () => (
   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
     strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
   </svg>
 );
 
 const EyeIcon = ({ closed }) => closed ? (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
     strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
-    <line x1="1" y1="1" x2="23" y2="23"/>
+    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+    <line x1="1" y1="1" x2="23" y2="23" />
   </svg>
 ) : (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
     strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-    <circle cx="12" cy="12" r="3"/>
+    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+    <circle cx="12" cy="12" r="3" />
   </svg>
 );
 
@@ -54,12 +80,16 @@ function ClockWidget() {
       borderRadius: 8, padding: '8px 12px', textAlign: 'right',
       boxShadow: 'var(--shadow)'
     }}>
-      <div style={{ fontFamily: 'var(--mono)', fontSize: 17, fontWeight: 600,
-        color: 'var(--text)', letterSpacing: '0.04em' }}>
+      <div style={{
+        fontFamily: 'var(--mono)', fontSize: 17, fontWeight: 600,
+        color: 'var(--text)', letterSpacing: '0.04em'
+      }}>
         {now.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
       </div>
-      <div style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--text3)',
-        marginTop: 2, letterSpacing: '0.04em' }}>
+      <div style={{
+        fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--text3)',
+        marginTop: 2, letterSpacing: '0.04em'
+      }}>
         {now.toLocaleDateString('it-IT', { weekday: 'short', day: '2-digit', month: 'short' }).toUpperCase()}
       </div>
     </div>
@@ -76,9 +106,11 @@ function NoteTooltip({ notes }) {
   return (
     <>
       <span ref={ref} onMouseEnter={handleEnter} onMouseLeave={() => setVisible(false)}
-        style={{ fontFamily: 'var(--mono)', fontSize: 10, fontWeight: 600,
+        style={{
+          fontFamily: 'var(--mono)', fontSize: 10, fontWeight: 600,
           background: 'rgba(0,0,0,0.25)', borderRadius: 3, padding: '1px 5px',
-          color: 'white', cursor: 'default', userSelect: 'none' }}>
+          color: 'white', cursor: 'default', userSelect: 'none'
+        }}>
         {notes.length}n
       </span>
       {visible && rect && createPortal(
@@ -91,14 +123,18 @@ function NoteTooltip({ notes }) {
           borderRadius: 8, padding: '10px 12px', width: 240, zIndex: 9999,
           boxShadow: 'var(--shadow-lg)', pointerEvents: 'none'
         }}>
-          <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text3)', marginBottom: 8,
-            textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: 'var(--mono)' }}>
+          <div style={{
+            fontSize: 10, fontWeight: 700, color: 'var(--text3)', marginBottom: 8,
+            textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: 'var(--mono)'
+          }}>
             Note
           </div>
           {notes.map((n, i) => (
-            <div key={n.id} style={{ fontSize: 12, color: 'var(--text)', lineHeight: 1.5,
+            <div key={n.id} style={{
+              fontSize: 12, color: 'var(--text)', lineHeight: 1.5,
               borderTop: i > 0 ? '1px solid var(--border)' : 'none',
-              paddingTop: i > 0 ? 8 : 0, marginTop: i > 0 ? 8 : 0 }}>
+              paddingTop: i > 0 ? 8 : 0, marginTop: i > 0 ? 8 : 0
+            }}>
               {n.content}
               {n.note_date && <div style={{ fontSize: 10, color: 'var(--text3)', marginTop: 2, fontFamily: 'var(--mono)' }}>
                 {new Date(n.note_date).toLocaleDateString('it-IT')}
@@ -112,8 +148,9 @@ function NoteTooltip({ notes }) {
 }
 
 // ─── TimetableCell ────────────────────────────────────────────────────────────
+// ─── TimetableCell ────────────────────────────────────────────────────────────
 function TimetableCell({ day, hour, slot, cellNotes, cellSubs, isLocked, isDragOver, isDragging,
-  onClick, onDragStart, onDragOver, onDragLeave, onDrop }) {
+  vacation, onClick, onDragStart, onDragOver, onDragLeave, onDrop }) {
   const isEmpty = !slot?.subject && slot?.slot_type !== 'free';
   const isFree = slot?.slot_type === 'free';
   const latestSub = cellSubs.length
@@ -140,13 +177,16 @@ function TimetableCell({ day, hour, slot, cellNotes, cellSubs, isLocked, isDragO
         borderRadius: 4, padding: '6px 4px', cursor: 'pointer', minHeight: 72,
         display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
         gap: 3, position: 'relative', transition: 'opacity 0.1s', userSelect: 'none',
+        opacity: vacation ? 0.6 : 1,
       }}
       onMouseEnter={e => { e.currentTarget.style.opacity = '0.8'; }}
-      onMouseLeave={e => { e.currentTarget.style.opacity = '1'; }}
+      onMouseLeave={e => { e.currentTarget.style.opacity = vacation ? '0.6' : '1'; }}
     >
       {isFree && !hasSub ? (
-        <span style={{ fontSize: 9, color: 'var(--free)', fontFamily: 'var(--mono)',
-          fontWeight: 600, letterSpacing: '0.05em' }}>LIBERA</span>
+        <span style={{
+          fontSize: 9, color: 'var(--free)', fontFamily: 'var(--mono)',
+          fontWeight: 600, letterSpacing: '0.05em'
+        }}>LIBERA</span>
       ) : isEmpty && !hasSub ? (
         <span style={{ fontSize: 18, color: 'var(--border2)', fontWeight: 300, lineHeight: 1 }}>
           {isLocked ? '—' : '+'}
@@ -154,15 +194,19 @@ function TimetableCell({ day, hour, slot, cellNotes, cellSubs, isLocked, isDragO
       ) : hasSub ? (
         <>
           {slot?.subject && (
-            <span style={{ fontSize: 9, color: 'var(--text3)', textDecoration: 'line-through',
+            <span style={{
+              fontSize: 9, color: 'var(--text3)', textDecoration: 'line-through',
               textDecorationColor: 'var(--warning)', maxWidth: '100%', overflow: 'hidden',
-              textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: 'var(--mono)' }}>
+              textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: 'var(--mono)'
+            }}>
               {slot.subject}
             </span>
           )}
-          <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--warning)', textAlign: 'center',
+          <span style={{
+            fontSize: 11, fontWeight: 700, color: 'var(--warning)', textAlign: 'center',
             lineHeight: 1.2, maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap', padding: '0 3px' }}>
+            whiteSpace: 'nowrap', padding: '0 3px'
+          }}>
             {latestSub.substitute}
           </span>
           <span style={{ fontSize: 9, color: 'var(--text3)', fontFamily: 'var(--mono)' }}>
@@ -172,14 +216,131 @@ function TimetableCell({ day, hour, slot, cellNotes, cellSubs, isLocked, isDragO
         </>
       ) : (
         <>
-          <span style={{ fontSize: 11, fontWeight: 600, color: 'white', lineHeight: 1.2, textAlign: 'center',
+          <span style={{
+            fontSize: 11, fontWeight: 600, color: 'white', lineHeight: 1.2, textAlign: 'center',
             maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', padding: '0 4px',
-            textShadow: '0 1px 2px rgba(0,0,0,0.3)' }}>
+            textShadow: '0 1px 2px rgba(0,0,0,0.3)'
+          }}>
             {slot.subject}
           </span>
           {cellNotes.length > 0 && <div onClick={e => e.stopPropagation()}><NoteTooltip notes={cellNotes} /></div>}
         </>
       )}
+
+      {/* Overlay Vacanza aggiunto come ultimo figlio */}
+      {vacation && (
+        <div style={{
+          position: 'absolute', inset: 0,
+          background: `${vacation.color}0a`,
+          borderRadius: 4, pointerEvents: 'none',
+          display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
+          paddingBottom: 3,
+        }}>
+          <span style={{
+            fontSize: 7, fontFamily: 'var(--mono)', color: vacation.color,
+            fontWeight: 700, letterSpacing: '0.04em', opacity: 0.8
+          }}>
+            {vacation.name.slice(0, 8).toUpperCase()}
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function VacationModal({ onClose, onSave, existing }) {
+  const [name, setName] = useState(existing?.name || '');
+  const [startDate, setStartDate] = useState(existing?.start_date || '');
+  const [endDate, setEndDate] = useState(existing?.end_date || '');
+  const [color, setColor] = useState(existing?.color || '#7c3aed');
+  const VAC_COLORS = ['#7c3aed', '#db2777', '#dc2626', '#ea580c', '#ca8a04', '#16a34a', '#0d9488', '#2563eb', '#0891b2'];
+
+  const save = () => {
+    if (!name.trim() || !startDate || !endDate) return;
+    if (endDate < startDate) return;
+    onSave({ name: name.trim(), start_date: startDate, end_date: endDate, color });
+  };
+
+  const nights = startDate && endDate
+    ? Math.max(0, Math.round((new Date(endDate) - new Date(startDate)) / 86400000) + 1)
+    : 0;
+
+  return (
+    <div className="overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="modal">
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <div>
+            <div style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--text3)', letterSpacing: '0.1em', marginBottom: 4 }}>
+              {existing ? 'MODIFICA' : 'NUOVA'} VACANZA
+            </div>
+            <h2 style={{ fontSize: 17, fontWeight: 600 }}>{existing ? existing.name : 'Aggiungi vacanza'}</h2>
+          </div>
+          <button onClick={onClose} className="btn-ghost" style={{ padding: '6px 12px', fontSize: 18 }}>×</button>
+        </div>
+
+        <div className="form-group">
+          <label className="label">Nome vacanza</label>
+          <input placeholder="es. Natale, Pasqua, Estate..." value={name}
+            onChange={e => setName(e.target.value)} autoFocus
+            onKeyDown={e => e.key === 'Enter' && save()} />
+        </div>
+
+        <div className="form-row">
+          <div className="form-group">
+            <label className="label">Dal</label>
+            <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} />
+          </div>
+          <div className="form-group">
+            <label className="label">Al</label>
+            <input type="date" value={endDate} min={startDate}
+              onChange={e => setEndDate(e.target.value)} />
+          </div>
+        </div>
+
+        {nights > 0 && (
+          <div style={{
+            background: 'var(--bg2)', borderRadius: 4, padding: '8px 12px',
+            marginBottom: 14, fontSize: 12, color: 'var(--text2)', fontFamily: 'var(--mono)'
+          }}>
+            🗓️ {nights} {nights === 1 ? 'giorno' : 'giorni'} di vacanza
+          </div>
+        )}
+
+        <div className="form-group">
+          <label className="label">Colore</label>
+          <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
+            {VAC_COLORS.map(c => (
+              <button key={c} onClick={() => setColor(c)} style={{
+                width: 30, height: 30, borderRadius: 6, background: c, padding: 0, border: 'none',
+                outline: color === c ? `2px solid ${c}` : 'none', outlineOffset: 2,
+                boxShadow: color === c ? `0 0 0 2px var(--bg), 0 0 0 4px ${c}` : 'none'
+              }} />
+            ))}
+            <input type="color" value={color} onChange={e => setColor(e.target.value)}
+              style={{ width: 30, height: 30, border: '1px solid var(--border)', borderRadius: 6, padding: 2 }} />
+          </div>
+        </div>
+
+        {/* Preview */}
+        {name && (
+          <div style={{
+            background: `${color}18`, border: `1px solid ${color}`,
+            borderRadius: 6, padding: '10px 14px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 10
+          }}>
+            <div style={{ width: 10, height: 10, borderRadius: '50%', background: color, flexShrink: 0 }} />
+            <span style={{ fontSize: 13, fontWeight: 600, color }}>{name}</span>
+          </div>
+        )}
+
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn-ghost" onClick={onClose} style={{ flex: 1, padding: 12 }}>Annulla</button>
+          <button className="btn-primary" onClick={save}
+            disabled={!name.trim() || !startDate || !endDate || endDate < startDate}
+            style={{ flex: 2, padding: 12 }}>
+            {existing ? 'Salva modifiche' : 'Aggiungi vacanza'}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -267,8 +428,10 @@ function CellModal({ cell, hours, isLocked, notes, substitutions, initialTab,
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
           <div>
-            <div style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--text3)',
-              letterSpacing: '0.1em', marginBottom: 4 }}>
+            <div style={{
+              fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--text3)',
+              letterSpacing: '0.1em', marginBottom: 4
+            }}>
               {cell.day.toUpperCase()} · ORA {cell.hour}
             </div>
             <h2 style={{ fontSize: 17, fontWeight: 600 }}>
@@ -327,16 +490,20 @@ function CellModal({ cell, hours, isLocked, notes, substitutions, initialTab,
                       style={{ width: 32, height: 32, border: '1px solid var(--border)', padding: 2, borderRadius: 6 }} />
                   </div>
                 </div>
-                <div style={{ borderLeft: `3px solid ${color}`, padding: '10px 14px', marginBottom: 20,
-                  background: 'var(--bg2)', borderRadius: '0 6px 6px 0' }}>
+                <div style={{
+                  borderLeft: `3px solid ${color}`, padding: '10px 14px', marginBottom: 20,
+                  background: 'var(--bg2)', borderRadius: '0 6px 6px 0'
+                }}>
                   <span style={{ fontWeight: 600, fontSize: 14 }}>{subject || 'Anteprima'}</span>
                 </div>
               </>
             )}
 
             {slotType === 'free' && (
-              <div style={{ background: 'var(--free-bg)', border: '1px solid var(--free)', borderRadius: 8,
-                padding: '12px 16px', marginBottom: 20, color: 'var(--free)', fontSize: 13 }}>
+              <div style={{
+                background: 'var(--free-bg)', border: '1px solid var(--free)', borderRadius: 8,
+                padding: '12px 16px', marginBottom: 20, color: 'var(--free)', fontSize: 13
+              }}>
                 Mostrata come buco / ora libera nella tabella.
               </div>
             )}
@@ -528,7 +695,8 @@ function CellModal({ cell, hours, isLocked, notes, substitutions, initialTab,
 // ─── SettingsPanel ────────────────────────────────────────────────────────────
 function SettingsPanel({ onClose, onReset, onExport, onImport, isLocked, onToggleLock,
   theme, onThemeChange, fileRef, hiddenHours, onRestoreHour, avatarColor, onAvatarColorChange,
-  shareToken, onCreateShare, onDeleteShare, onLogout }) {
+  shareToken, onCreateShare, onDeleteShare, onLogout,
+  vacations, onAddVacation, onEditVacation, onDeleteVacation }) {
 
   const [tab, setTab] = useState('general');
   const [changelog, setChangelog] = useState([]);
@@ -538,7 +706,7 @@ function SettingsPanel({ onClose, onReset, onExport, onImport, isLocked, onToggl
   const loadChangelog = async () => {
     setClLoading(true);
     try { const r = await api.get('/timetable/changelog'); setChangelog(r.data); }
-    catch (_) {}
+    catch (_) { }
     finally { setClLoading(false); }
   };
 
@@ -563,8 +731,12 @@ function SettingsPanel({ onClose, onReset, onExport, onImport, isLocked, onToggl
     }
   };
 
+  const [editingVac, setEditingVac] = useState(null); // null | 'new' | vacation object
+  const [vacFilter, setVacFilter] = useState('upcoming'); // 'upcoming' | 'all'
+
   const settingsTabs = [
     { id: 'general', label: 'Generale' },
+    { id: 'vacations', label: vacations.length ? `Vacanze (${vacations.length})` : 'Vacanze' },
     { id: 'share', label: 'Link' },
     { id: 'hours', label: hiddenHours.length ? `Ore (${hiddenHours.length})` : 'Ore' },
     { id: 'changelog', label: 'Log' },
@@ -590,11 +762,15 @@ function SettingsPanel({ onClose, onReset, onExport, onImport, isLocked, onToggl
         {tab === 'general' && (
           <div>
             {/* Avatar */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '12px 0',
-              borderBottom: '1px solid var(--border)', marginBottom: 4 }}>
-              <div style={{ width: 40, height: 40, borderRadius: '50%', background: avatarColor,
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 14, padding: '12px 0',
+              borderBottom: '1px solid var(--border)', marginBottom: 4
+            }}>
+              <div style={{
+                width: 40, height: 40, borderRadius: '50%', background: avatarColor,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                flexShrink: 0, fontSize: 16, fontWeight: 700, color: 'white' }}>
+                flexShrink: 0, fontSize: 16, fontWeight: 700, color: 'white'
+              }}>
                 {(localStorage.getItem('username') || '?')[0].toUpperCase()}
               </div>
               <div style={{ flex: 1 }}>
@@ -603,11 +779,14 @@ function SettingsPanel({ onClose, onReset, onExport, onImport, isLocked, onToggl
                   {PRESET_COLORS.map(c => (
                     <button key={c} onClick={() => onAvatarColorChange(c)} style={{
                       width: 22, height: 22, borderRadius: '50%', background: c, padding: 0,
-                      border: avatarColor === c ? '2px solid var(--text)' : '2px solid transparent' }} />
+                      border: avatarColor === c ? '2px solid var(--text)' : '2px solid transparent'
+                    }} />
                   ))}
                   <input type="color" value={avatarColor} onChange={e => onAvatarColorChange(e.target.value)}
-                    style={{ width: 22, height: 22, border: 'none', padding: 0,
-                      borderRadius: '50%', cursor: 'pointer', background: 'transparent' }} />
+                    style={{
+                      width: 22, height: 22, border: 'none', padding: 0,
+                      borderRadius: '50%', cursor: 'pointer', background: 'transparent'
+                    }} />
                 </div>
               </div>
             </div>
@@ -616,8 +795,10 @@ function SettingsPanel({ onClose, onReset, onExport, onImport, isLocked, onToggl
               { label: 'Tema scuro', sub: 'Modalità scura', checked: theme === 'dark', onChange: e => onThemeChange(e.target.checked ? 'dark' : 'light') },
               { label: 'Blocca orario', sub: 'Solo note e supplenze', checked: isLocked, onChange: onToggleLock },
             ].map(row => (
-              <div key={row.label} style={{ display: 'flex', justifyContent: 'space-between',
-                alignItems: 'center', padding: '14px 0', borderBottom: '1px solid var(--border)' }}>
+              <div key={row.label} style={{
+                display: 'flex', justifyContent: 'space-between',
+                alignItems: 'center', padding: '14px 0', borderBottom: '1px solid var(--border)'
+              }}>
                 <div>
                   <div style={{ fontSize: 14, fontWeight: 500 }}>{row.label}</div>
                   <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 2 }}>{row.sub}</div>
@@ -633,14 +814,18 @@ function SettingsPanel({ onClose, onReset, onExport, onImport, isLocked, onToggl
               <button onClick={onExport} className="btn-ghost" style={{ textAlign: 'left', padding: 12 }}>Esporta dati (.json)</button>
               <button onClick={() => fileRef.current?.click()} className="btn-ghost" style={{ textAlign: 'left', padding: 12 }}>Importa dati (.json)</button>
               <input ref={fileRef} type="file" accept=".json" style={{ display: 'none' }} onChange={onImport} />
-              <button onClick={onReset} style={{ textAlign: 'left', background: 'transparent',
+              <button onClick={onReset} style={{
+                textAlign: 'left', background: 'transparent',
                 border: '1px solid var(--border)', borderRadius: 'var(--radius)',
-                padding: 12, fontSize: 14, color: 'var(--danger)', cursor: 'pointer', fontFamily: 'var(--font)' }}>
+                padding: 12, fontSize: 14, color: 'var(--danger)', cursor: 'pointer', fontFamily: 'var(--font)'
+              }}>
                 Riconfigura orario
               </button>
-              <button onClick={onLogout} style={{ textAlign: 'left', background: 'transparent',
+              <button onClick={onLogout} style={{
+                textAlign: 'left', background: 'transparent',
                 border: '1px solid var(--border)', borderRadius: 'var(--radius)',
-                padding: 12, fontSize: 14, color: 'var(--text2)', cursor: 'pointer', fontFamily: 'var(--font)' }}>
+                padding: 12, fontSize: 14, color: 'var(--text2)', cursor: 'pointer', fontFamily: 'var(--font)'
+              }}>
                 Esci dall'account
               </button>
             </div>
@@ -658,9 +843,11 @@ function SettingsPanel({ onClose, onReset, onExport, onImport, isLocked, onToggl
               </button>
             ) : (
               <div>
-                <div style={{ background: 'var(--bg2)', border: '1px solid var(--border)',
+                <div style={{
+                  background: 'var(--bg2)', border: '1px solid var(--border)',
                   borderRadius: 6, padding: '10px 12px', marginBottom: 10,
-                  fontFamily: 'var(--mono)', fontSize: 11, wordBreak: 'break-all', color: 'var(--text2)' }}>
+                  fontFamily: 'var(--mono)', fontSize: 11, wordBreak: 'break-all', color: 'var(--text2)'
+                }}>
                   {shareUrl}
                 </div>
                 <div style={{ display: 'flex', gap: 8 }}>
@@ -683,13 +870,126 @@ function SettingsPanel({ onClose, onReset, onExport, onImport, isLocked, onToggl
               <div className="empty-state">Nessuna ora nascosta.<br />Hover sul numero ora → clicca ×</div>
             ) : (
               hiddenHours.sort((a, b) => a - b).map(h => (
-                <div key={h} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                  padding: '10px 12px', background: 'var(--bg2)', borderRadius: 6, marginBottom: 6 }}>
+                <div key={h} style={{
+                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                  padding: '10px 12px', background: 'var(--bg2)', borderRadius: 6, marginBottom: 6
+                }}>
                   <span style={{ fontFamily: 'var(--mono)', fontSize: 14 }}>{h}ª ora</span>
                   <button className="btn-ghost" onClick={() => onRestoreHour(h)}
                     style={{ padding: '5px 14px', fontSize: 13 }}>Ripristina</button>
                 </div>
               ))
+            )}
+          </div>
+        )}
+
+        {tab === 'vacations' && (
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <p style={{ fontSize: 13, color: 'var(--text2)' }}>
+                Periodi di vacanza visibili nella griglia settimanale.
+              </p>
+              <button className="btn-primary" onClick={() => setEditingVac('new')}
+                style={{ padding: '8px 14px', fontSize: 13, flexShrink: 0 }}>
+                + Aggiungi
+              </button>
+            </div>
+
+            {/* Filtro */}
+            <div style={{ display: 'flex', gap: 6, marginBottom: 14 }}>
+              {[['upcoming', 'Prossime'], ['all', 'Tutte']].map(([v, l]) => (
+                <button key={v} onClick={() => setVacFilter(v)} style={{
+                  padding: '5px 12px', fontSize: 12, borderRadius: 4, border: '1px solid',
+                  borderColor: vacFilter === v ? 'var(--primary)' : 'var(--border)',
+                  background: vacFilter === v ? 'var(--primary-bg)' : 'transparent',
+                  color: vacFilter === v ? 'var(--primary)' : 'var(--text2)',
+                  cursor: 'pointer', fontFamily: 'var(--font)',
+                }}>{l}</button>
+              ))}
+            </div>
+
+            {(() => {
+              const today = new Date().toISOString().split('T')[0];
+              const filtered = vacFilter === 'upcoming'
+                ? vacations.filter(v => v.end_date >= today)
+                : vacations;
+              const sorted = [...filtered].sort((a, b) => a.start_date.localeCompare(b.start_date));
+
+              if (sorted.length === 0) return (
+                <div className="empty-state">
+                  {vacFilter === 'upcoming' ? 'Nessuna vacanza in arrivo.' : 'Nessuna vacanza salvata.'}
+                  <br />
+                  <button onClick={() => setEditingVac('new')}
+                    style={{
+                      marginTop: 8, background: 'none', border: 'none', color: 'var(--primary)',
+                      cursor: 'pointer', fontSize: 13, fontFamily: 'var(--font)'
+                    }}>
+                    + Aggiungi la prima
+                  </button>
+                </div>
+              );
+
+              return sorted.map(vac => {
+                const isPast = vac.end_date < today;
+                const isActive = vac.start_date <= today && vac.end_date >= today;
+                const nights = Math.round((new Date(vac.end_date) - new Date(vac.start_date)) / 86400000) + 1;
+                return (
+                  <div key={vac.id} style={{
+                    background: 'var(--bg2)', border: `1px solid ${isActive ? vac.color : 'var(--border)'}`,
+                    borderLeft: `3px solid ${vac.color}`, borderRadius: 6,
+                    padding: '12px 14px', marginBottom: 8,
+                    opacity: isPast ? 0.55 : 1,
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                          <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>{vac.name}</span>
+                          {isActive && (
+                            <span style={{
+                              fontFamily: 'var(--mono)', fontSize: 9, fontWeight: 700,
+                              background: `${vac.color}22`, color: vac.color, borderRadius: 3,
+                              padding: '1px 5px', border: `1px solid ${vac.color}`
+                            }}>IN CORSO</span>
+                          )}
+                          {isPast && (
+                            <span style={{
+                              fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--text3)',
+                              background: 'var(--bg3)', borderRadius: 3, padding: '1px 5px'
+                            }}>PASSATA</span>
+                          )}
+                        </div>
+                        <div style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--text3)' }}>
+                          {new Date(vac.start_date).toLocaleDateString('it-IT', { day: '2-digit', month: 'short' })}
+                          {' → '}
+                          {new Date(vac.end_date).toLocaleDateString('it-IT', { day: '2-digit', month: 'short', year: 'numeric' })}
+                          {' · '}
+                          {nights} {nights === 1 ? 'giorno' : 'giorni'}
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: 4 }}>
+                        <button className="btn-edit" onClick={() => setEditingVac(vac)} title="Modifica">
+                          <PencilIcon />
+                        </button>
+                        <button className="btn-danger" onClick={() => {
+                          if (window.confirm(`Eliminare "${vac.name}"?`)) onDeleteVacation(vac.id);
+                        }} style={{ padding: '4px 9px', fontSize: 13 }}>×</button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              });
+            })()}
+
+            {editingVac && (
+              <VacationModal
+                existing={editingVac === 'new' ? null : editingVac}
+                onClose={() => setEditingVac(null)}
+                onSave={async (data) => {
+                  if (editingVac === 'new') await onAddVacation(data);
+                  else await onEditVacation(editingVac.id, data);
+                  setEditingVac(null);
+                }}
+              />
             )}
           </div>
         )}
@@ -703,10 +1003,14 @@ function SettingsPanel({ onClose, onReset, onExport, onImport, isLocked, onToggl
             ) : (
               <div style={{ maxHeight: 400, overflowY: 'auto' }}>
                 {changelog.map(entry => (
-                  <div key={entry.id} style={{ padding: '10px 0', borderBottom: '1px solid var(--border)',
-                    display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-                    <span style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--text3)',
-                      flexShrink: 0, marginTop: 2 }}>
+                  <div key={entry.id} style={{
+                    padding: '10px 0', borderBottom: '1px solid var(--border)',
+                    display: 'flex', gap: 12, alignItems: 'flex-start'
+                  }}>
+                    <span style={{
+                      fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--text3)',
+                      flexShrink: 0, marginTop: 2
+                    }}>
                       {new Date(entry.created_at).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' })}
                     </span>
                     <span style={{ fontSize: 12, color: 'var(--text)', lineHeight: 1.5 }}>
@@ -736,6 +1040,13 @@ export default function TimetablePage({ user, onLogout, theme, onThemeChange, is
   const [hiddenHours, setHiddenHours] = useState([]);
   const [avatarColor, setAvatarColor] = useState('#2563eb');
   const [shareToken, setShareToken] = useState(null);
+  const [vacations, setVacations] = useState([]);
+  const weekDates = useMemo(() => getWeekDates(), []);
+  const getVacationForDay = useCallback((dayName) => {
+    const date = weekDates[dayName];
+    if (!date) return null;
+    return vacations.find(v => date >= v.start_date && date <= v.end_date) || null;
+  }, [vacations, weekDates]);
   const [showSettings, setShowSettings] = useState(false);
   const [toast, setToast] = useState(null);
   const [view, setView] = useState('week');
@@ -749,7 +1060,7 @@ export default function TimetablePage({ user, onLogout, theme, onThemeChange, is
     () => localStorage.getItem('stats_hidden') === '1'
   );
   const [extraHours, setExtraHours] = useState(
-  () => parseInt(localStorage.getItem('extra_hours') || '0')
+    () => parseInt(localStorage.getItem('extra_hours') || '0')
   );
   const fileInputRef = useRef(null);
 
@@ -761,7 +1072,7 @@ export default function TimetablePage({ user, onLogout, theme, onThemeChange, is
   const load = useCallback(async () => {
     try {
       const res = await api.get('/timetable/all');
-      const { settings: s, slots: sl, notes: n, substitutions: sub } = res.data;
+      const { settings: s, slots: sl, notes: n, substitutions: sub, vacations: vac } = res.data;
       setSettings(s);
       setIsLocked(s.locked || false);
       setHiddenHours(s.hiddenHours || []);
@@ -769,8 +1080,9 @@ export default function TimetablePage({ user, onLogout, theme, onThemeChange, is
       setSlots(sl);
       setNotes(n);
       setSubstitutions(sub);
+      setVacations(vac || []);
       localStorage.setItem('timetable_cache', JSON.stringify(res.data));
-      api.get('/timetable/share').then(r => setShareToken(r.data.token)).catch(() => {});
+      api.get('/timetable/share').then(r => setShareToken(r.data.token)).catch(() => { });
     } catch (e) {
       const cached = localStorage.getItem('timetable_cache');
       if (cached) {
@@ -783,7 +1095,7 @@ export default function TimetablePage({ user, onLogout, theme, onThemeChange, is
           setSlots(data.slots);
           setNotes(data.notes);
           setSubstitutions(data.substitutions);
-        } catch (_) {}
+        } catch (_) { }
       }
     } finally { setLoading(false); }
   }, []);
@@ -863,6 +1175,30 @@ export default function TimetablePage({ user, onLogout, theme, onThemeChange, is
   const handleDeleteSub = async (id) => {
     await api.delete(`/timetable/substitutions/${id}`);
     setSubstitutions(prev => prev.filter(s => s.id !== id));
+  };
+
+  const handleAddVacation = async (data) => {
+    try {
+      const res = await api.post('/timetable/vacations', data);
+      setVacations(prev => [...prev, { ...data, id: res.data.id }]);
+      showToast('Vacanza aggiunta');
+    } catch { showToast('Errore', 'err'); }
+  };
+
+  const handleEditVacation = async (id, data) => {
+    try {
+      await api.put(`/timetable/vacations/${id}`, data);
+      setVacations(prev => prev.map(v => v.id === id ? { ...v, ...data } : v));
+      showToast('Vacanza aggiornata');
+    } catch { showToast('Errore', 'err'); }
+  };
+
+  const handleDeleteVacation = async (id) => {
+    try {
+      await api.delete(`/timetable/vacations/${id}`);
+      setVacations(prev => prev.filter(v => v.id !== id));
+      showToast('Vacanza eliminata');
+    } catch { showToast('Errore', 'err'); }
   };
 
   const toggleLock = async () => {
@@ -968,14 +1304,18 @@ export default function TimetablePage({ user, onLogout, theme, onThemeChange, is
             ORARIO
           </span>
           {isLocked && (
-            <span style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--warning)',
-              background: 'var(--warning-bg)', padding: '2px 6px', borderRadius: 3 }}>
+            <span style={{
+              fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--warning)',
+              background: 'var(--warning-bg)', padding: '2px 6px', borderRadius: 3
+            }}>
               BLOCCATO
             </span>
           )}
           {!isOnline && (
-            <span style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--danger)',
-              background: 'var(--danger-bg)', padding: '2px 6px', borderRadius: 3 }}>
+            <span style={{
+              fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--danger)',
+              background: 'var(--danger-bg)', padding: '2px 6px', borderRadius: 3
+            }}>
               OFFLINE
             </span>
           )}
@@ -983,13 +1323,17 @@ export default function TimetablePage({ user, onLogout, theme, onThemeChange, is
 
         <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
           {/* Toggle settimana / domani */}
-          <div style={{ display: 'flex', background: 'var(--bg2)', borderRadius: 6,
-            border: '1px solid var(--border)', overflow: 'hidden' }}>
+          <div style={{
+            display: 'flex', background: 'var(--bg2)', borderRadius: 6,
+            border: '1px solid var(--border)', overflow: 'hidden'
+          }}>
             {[{ v: 'week', l: 'Sett.' }, { v: 'today', l: 'Domani' }].map(opt => (
               <button key={opt.v} onClick={() => setView(opt.v)}
-                style={{ padding: '6px 12px', fontSize: 12, fontWeight: 500, border: 'none', borderRadius: 0,
+                style={{
+                  padding: '6px 12px', fontSize: 12, fontWeight: 500, border: 'none', borderRadius: 0,
                   background: view === opt.v ? 'var(--primary)' : 'transparent',
-                  color: view === opt.v ? 'white' : 'var(--text2)', transition: 'all 0.15s' }}>
+                  color: view === opt.v ? 'white' : 'var(--text2)', transition: 'all 0.15s'
+                }}>
                 {opt.l}
               </button>
             ))}
@@ -1004,14 +1348,18 @@ export default function TimetablePage({ user, onLogout, theme, onThemeChange, is
 
           {/* Avatar + Impostazioni (ingranaggio) */}
           <button onClick={() => setShowSettings(true)}
-            style={{ display: 'flex', alignItems: 'center', gap: 8,
+            style={{
+              display: 'flex', alignItems: 'center', gap: 8,
               background: 'transparent', border: '1px solid var(--border)',
-              borderRadius: 8, padding: '5px 10px', cursor: 'pointer', transition: 'all 0.15s' }}
+              borderRadius: 8, padding: '5px 10px', cursor: 'pointer', transition: 'all 0.15s'
+            }}
             onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--border2)'}
             onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}>
-            <div style={{ width: 24, height: 24, borderRadius: '50%', background: avatarColor,
+            <div style={{
+              width: 24, height: 24, borderRadius: '50%', background: avatarColor,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 11, fontWeight: 700, color: 'white', flexShrink: 0 }}>
+              fontSize: 11, fontWeight: 700, color: 'white', flexShrink: 0
+            }}>
               {(user?.username || '?')[0].toUpperCase()}
             </div>
             <span style={{ color: 'var(--text2)' }}><GearIcon /></span>
@@ -1021,9 +1369,11 @@ export default function TimetablePage({ user, onLogout, theme, onThemeChange, is
 
       {/* ── Stats strip ── */}
       {!statsHidden && (
-        <div style={{ borderBottom: '1px solid var(--border)', padding: '7px 16px',
+        <div style={{
+          borderBottom: '1px solid var(--border)', padding: '7px 16px',
           display: 'flex', gap: 20, background: 'var(--bg2)', overflowX: 'auto',
-          alignItems: 'center' }}>
+          alignItems: 'center'
+        }}>
           {[
             { label: 'giorni', value: days.length },
             { label: 'ore', value: filledSlots.length },
@@ -1038,9 +1388,11 @@ export default function TimetablePage({ user, onLogout, theme, onThemeChange, is
           ))}
           {/* Pulsante nascondi stats — alla fine */}
           <button onClick={toggleStatsHidden}
-            style={{ marginLeft: 'auto', flexShrink: 0, background: 'transparent',
+            style={{
+              marginLeft: 'auto', flexShrink: 0, background: 'transparent',
               border: 'none', color: 'var(--text3)', fontSize: 11, cursor: 'pointer',
-              fontFamily: 'var(--mono)', padding: '2px 6px' }}>
+              fontFamily: 'var(--mono)', padding: '2px 6px'
+            }}>
             nascondi
           </button>
         </div>
@@ -1048,11 +1400,15 @@ export default function TimetablePage({ user, onLogout, theme, onThemeChange, is
 
       {/* Bottone per mostrare di nuovo le stats quando sono nascoste */}
       {statsHidden && (
-        <div style={{ padding: '4px 16px', background: 'var(--bg2)',
-          borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end' }}>
+        <div style={{
+          padding: '4px 16px', background: 'var(--bg2)',
+          borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end'
+        }}>
           <button onClick={toggleStatsHidden}
-            style={{ background: 'transparent', border: 'none', color: 'var(--text3)',
-              fontSize: 11, cursor: 'pointer', fontFamily: 'var(--mono)', padding: '2px 6px' }}>
+            style={{
+              background: 'transparent', border: 'none', color: 'var(--text3)',
+              fontSize: 11, cursor: 'pointer', fontFamily: 'var(--mono)', padding: '2px 6px'
+            }}>
             mostra statistiche
           </button>
         </div>
@@ -1060,19 +1416,22 @@ export default function TimetablePage({ user, onLogout, theme, onThemeChange, is
 
       {/* ── Contenuto ── */}
       {view === 'today' ? (
-      <TodayView
-        settings={settings}
-        slots={slots}
-        notes={notes}
-        substitutions={substitutions}
-        isLocked={isLocked}
-        onOpenCell={openCell}
-        extraHours={extraHours}
-      />
+        <TodayView
+          settings={settings}
+          slots={slots}
+          notes={notes}
+          substitutions={substitutions}
+          vacations={vacations}          // ← AGGIUNGI
+          isLocked={isLocked}
+          onOpenCell={openCell}
+          extraHours={extraHours}
+        />
       ) : timetableHidden ? (
         /* Schermata "orario nascosto" */
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center',
-          justifyContent: 'center', minHeight: '50vh', gap: 12, padding: 20 }}>
+        <div style={{
+          display: 'flex', flexDirection: 'column', alignItems: 'center',
+          justifyContent: 'center', minHeight: '50vh', gap: 12, padding: 20
+        }}>
           <div style={{ color: 'var(--text3)', fontSize: 13 }}>Orario nascosto</div>
           <button className="btn-ghost" onClick={toggleTimetableHidden}
             style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 20px' }}>
@@ -1089,23 +1448,58 @@ export default function TimetablePage({ user, onLogout, theme, onThemeChange, is
           }}>
             {/* Header giorni */}
             <div />
-            {days.map(day => (
-              <div key={day} style={{ background: 'var(--bg2)', border: '1px solid var(--border)',
-                borderRadius: 4, padding: '8px 4px', textAlign: 'center' }}>
-                <div style={{ fontFamily: 'var(--mono)', fontSize: 10, fontWeight: 600,
-                  color: 'var(--text)', letterSpacing: '0.06em' }}>
-                  {day.slice(0, 3).toUpperCase()}
+            {days.map(day => {
+              const vac = getVacationForDay(day);
+              const dayDate = weekDates[day];
+              return (
+                <div key={day} style={{
+                  background: vac ? `${vac.color}18` : 'var(--bg2)',
+                  border: `1px solid ${vac ? vac.color : 'var(--border)'}`,
+                  borderRadius: 4, padding: '6px 4px', textAlign: 'center',
+                  position: 'relative', overflow: 'hidden',
+                }}>
+                  {vac && (
+                    <div style={{
+                      position: 'absolute', top: 0, left: 0, right: 0, height: 2,
+                      background: vac.color,
+                    }} />
+                  )}
+                  <div style={{
+                    fontFamily: 'var(--mono)', fontSize: 10, fontWeight: 600,
+                    color: vac ? vac.color : 'var(--text)', letterSpacing: '0.06em'
+                  }}>
+                    {day.slice(0, 3).toUpperCase()}
+                  </div>
+                  {dayDate && (
+                    <div style={{
+                      fontFamily: 'var(--mono)', fontSize: 8, color: vac ? vac.color : 'var(--text3)',
+                      marginTop: 1, opacity: 0.7
+                    }}>
+                      {new Date(dayDate).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' })}
+                    </div>
+                  )}
+                  {vac && (
+                    <div style={{
+                      fontSize: 8, fontWeight: 700, color: vac.color, marginTop: 1,
+                      fontFamily: 'var(--mono)', letterSpacing: '0.03em',
+                      whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', padding: '0 2px'
+                    }}>
+                      🏖️ {vac.name}
+                    </div>
+                  )}
                 </div>
-              </div>
-            ))}
+              );
+            })}
 
             {/* Ore */}
             {hours.map(hour => (
               <>
                 <div key={`h${hour}`}
-                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
                     background: 'var(--bg2)', border: '1px solid var(--border)',
-                    borderRadius: 4, position: 'relative', minHeight: 44, cursor: 'default' }}
+                    borderRadius: 4, position: 'relative', minHeight: 44, cursor: 'default'
+                  }}
                   onMouseEnter={e => { const b = e.currentTarget.querySelector('.hhb'); if (b) b.style.opacity = '1'; }}
                   onMouseLeave={e => { const b = e.currentTarget.querySelector('.hhb'); if (b) b.style.opacity = '0'; }}>
                   <span style={{ fontFamily: 'var(--mono)', fontSize: 12, fontWeight: 600, color: 'var(--text2)' }}>
@@ -1113,10 +1507,12 @@ export default function TimetablePage({ user, onLogout, theme, onThemeChange, is
                   </span>
                   <button className="hhb" onClick={() => toggleHideHour(hour)}
                     title={`Nascondi ora ${hour}`}
-                    style={{ position: 'absolute', top: 2, right: 2, width: 14, height: 14,
+                    style={{
+                      position: 'absolute', top: 2, right: 2, width: 14, height: 14,
                       fontSize: 10, background: 'var(--bg3)', border: 'none', borderRadius: 2,
                       color: 'var(--text3)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      opacity: 0, transition: 'opacity 0.15s', cursor: 'pointer', padding: 0, lineHeight: 1 }}>
+                      opacity: 0, transition: 'opacity 0.15s', cursor: 'pointer', padding: 0, lineHeight: 1
+                    }}>
                     ×
                   </button>
                 </div>
@@ -1140,6 +1536,7 @@ export default function TimetablePage({ user, onLogout, theme, onThemeChange, is
                       isLocked={isLocked}
                       isDragOver={isOver}
                       isDragging={isDragging}
+                      vacation={getVacationForDay(day)}   // ← AGGIUNGI QUESTA RIGA
                       onClick={() => openCell(day, hour)}
                       onDragStart={() => setDragFrom({ day, hour })}
                       onDragOver={() => setDragOver({ day, hour })}
@@ -1222,12 +1619,14 @@ export default function TimetablePage({ user, onLogout, theme, onThemeChange, is
 
       {/* Toast */}
       {toast && (
-        <div style={{ position: 'fixed', top: 'calc(var(--header-h) + 8px)', right: 16, zIndex: 300,
+        <div style={{
+          position: 'fixed', top: 'calc(var(--header-h) + 8px)', right: 16, zIndex: 300,
           background: toast.type === 'err' ? 'var(--danger-bg)' : 'var(--card)',
           border: `1px solid ${toast.type === 'err' ? 'var(--danger)' : 'var(--border)'}`,
           borderRadius: 8, padding: '10px 16px', fontSize: 13,
           color: toast.type === 'err' ? 'var(--danger)' : 'var(--success)',
-          boxShadow: 'var(--shadow-md)' }}>
+          boxShadow: 'var(--shadow-md)'
+        }}>
           {toast.msg}
         </div>
       )}
@@ -1273,6 +1672,10 @@ export default function TimetablePage({ user, onLogout, theme, onThemeChange, is
           onCreateShare={handleCreateShare}
           onDeleteShare={handleDeleteShare}
           onLogout={onLogout}
+          vacations={vacations}
+          onAddVacation={handleAddVacation}
+          onEditVacation={handleEditVacation}
+          onDeleteVacation={handleDeleteVacation}
         />
       )}
     </div>

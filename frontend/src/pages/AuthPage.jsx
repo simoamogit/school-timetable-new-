@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import api from '../api/index.js';
 
-export default function AuthPage({ onLogin }) {
+export default function AuthPage({ onLogin, onBack }) {
   const [mode, setMode] = useState('login');
   const [form, setForm] = useState({ username: '', email: '', password: '' });
   const [error, setError] = useState('');
@@ -40,6 +40,16 @@ export default function AuthPage({ onLogin }) {
           <h1 style={{ fontSize: 22, fontWeight: 600, color: 'var(--text)' }}>
             {mode === 'login' ? 'Accedi' : 'Crea account'}
           </h1>
+          {onBack && (
+            <button onClick={onBack} style={{
+              background: 'none', border: 'none', color: 'rgba(255,255,255,0.35)',
+              fontSize: 12, cursor: 'pointer', padding: '0 0 16px 0',
+              fontFamily: 'IBM Plex Mono, monospace', letterSpacing: '0.08em',
+              display: 'flex', alignItems: 'center', gap: 4
+            }}>
+              ← torna alla home
+            </button>
+          )}
         </div>
 
         {error && (
@@ -74,8 +84,10 @@ export default function AuthPage({ onLogin }) {
         </button>
 
         <button onClick={() => { setMode(m => m === 'login' ? 'register' : 'login'); setError(''); }}
-          style={{ background: 'none', border: 'none', color: 'var(--text2)', fontSize: 13,
-            cursor: 'pointer', padding: 0, textDecoration: 'underline' }}>
+          style={{
+            background: 'none', border: 'none', color: 'var(--text2)', fontSize: 13,
+            cursor: 'pointer', padding: 0, textDecoration: 'underline'
+          }}>
           {mode === 'login' ? 'Non hai un account? Registrati' : 'Hai già un account? Accedi'}
         </button>
       </div>

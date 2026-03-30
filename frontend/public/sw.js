@@ -18,6 +18,11 @@ self.addEventListener('activate', e => {
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
 
+  // Skip non-http(s) schemes
+  if (!url.protocol.startsWith('http')) {
+    return;
+  }
+
   // API: network first, fallback gracefully
   if (url.pathname.startsWith('/api/')) {
     e.respondWith(
