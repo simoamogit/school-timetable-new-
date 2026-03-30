@@ -340,6 +340,7 @@ router.post('/import', async (req, res) => {
     await client.query('DELETE FROM slots WHERE user_id=$1', [req.user.id]);
     await client.query('DELETE FROM notes WHERE user_id=$1', [req.user.id]);
     await client.query('DELETE FROM substitutions WHERE user_id=$1', [req.user.id]);
+    // Nota: le vacazioni NON vengono importate - rimangono quelle existing
     for (const s of slots)
       await client.query('INSERT INTO slots (user_id,day,hour,subject,color,slot_type) VALUES ($1,$2,$3,$4,$5,$6)',
         [req.user.id, s.day, s.hour, s.subject, s.color, s.slot_type || 'subject']);
