@@ -37,11 +37,12 @@ router.use(auth);
 router.get('/all', async (req, res) => {
   try {
     await cleanupExpired(req.user.id);
-    const [sR, slR, nR, subR] = await Promise.all([
+    const [sR, slR, nR, subR, vacR] = await Promise.all([
       pool.query('SELECT * FROM user_settings WHERE user_id=$1', [req.user.id]),
       pool.query('SELECT * FROM slots WHERE user_id=$1', [req.user.id]),
       pool.query('SELECT * FROM notes WHERE user_id=$1 ORDER BY created_at DESC', [req.user.id]),
-      pool.query('SELECT * FROM substitutions WHERE user_id=$1 ORDER BY sub_date DESC', [req.user.id])
+      pool.query('SELECT * FROM substitutions WHERE user_id=$1 ORDER BY sub_date DESC', [req.user.id]),
+      pool.query('SELECT * FROM vacations WHERE user_id=$1 ORDER BY start_date', [req.user.id])
     ]);
     const s = sR.rows[0];
     res.json({
@@ -56,7 +57,8 @@ router.get('/all', async (req, res) => {
       },
       slots: slR.rows,
       notes: nR.rows,
-      substitutions: subR.rows
+      substitutions: subR.rows,
+      vacations: vacR.rows
     });
   } catch (e) { console.error(e); res.status(500).json({ error: 'Errore server' }); }
 });
