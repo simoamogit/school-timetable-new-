@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 
 const MONTHS = ['gennaio','febbraio','marzo','aprile','maggio','giugno','luglio','agosto','settembre','ottobre','novembre','dicembre'];
 const DOW = ['D','L','M','M','G','V','S'];
@@ -36,7 +37,7 @@ function Calendar({ selected, min, onPick, onClose }) {
     ? pending.toLocaleDateString('it-IT', { weekday: 'short', day: '2-digit', month: 'short' })
     : 'Seleziona data';
 
-  return (
+  return createPortal(
     <div className="dialog-overlay" onClick={onClose}>
       <div className="datepicker-popover" onClick={e => e.stopPropagation()}>
         <div className="datepicker-header">
@@ -87,7 +88,8 @@ function Calendar({ selected, min, onPick, onClose }) {
             onClick={() => { if (pending) onPick(toIso(pending)); onClose(); }}>OK</button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 

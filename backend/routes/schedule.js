@@ -1,6 +1,5 @@
 const express = require('express');
 const { pool } = require('../db/database');
-const auth = require('../middleware/auth');
 
 const router = express.Router();
 
@@ -30,6 +29,21 @@ function todayIsoRome() {
   return new Intl.DateTimeFormat('en-CA', {
     timeZone: 'Europe/Rome', year: 'numeric', month: '2-digit', day: '2-digit'
   }).format(new Date());
+}
+
+// Queste due rotte sono pubbliche (nessun login): la dashboard esterna non ha
+// una sessione utente attiva, quindi non può mandare un Bearer token. Senza
+// JWT serve comunque un modo per capire DI CHI è l'orario da restituire:
+// ?username=xxx lo rende esplicito, altrimenti si assume il primo utente
+// registrato (va benissimo per un'app a singolo utente; se in futuro ce ne
+// sono più di uno, passa sempre ?username=).
+async function resolveUserId(req) {
+  if (req.query.username) {
+    const r = await pool.query('SELECT id FROM users WHERE username=$1', [req.query.username]);
+    return r.rows[0]?.id || null;
+  }
+  const r = await pool.query('SELECT id FROM users ORDER BY id ASC LIMIT 1');
+  return r.rows[0]?.id || null;
 }
 
 async function loadContext(userId) {
@@ -121,11 +135,14 @@ function buildDay(dateIso, ctx) {
   return { date: dateIso, day_name: dayName, is_holiday: false, holiday_name: null, exit_time, events };
 }
 
-// GET /api/schedule/today
-router.get('/today', auth, async (req, res) => {
+// GET /api/schedule/today — pubblica, nessun login richiesto
+router.get('/today', async (req, res) => {
   try {
+    const userId = await resolveUserId(req);
+    if (!userId) return res.status(404).json({ error: 'Utente non trovato' });
+
     const dateIso = todayIsoRome();
-    const ctx = await loadContext(req.user.id);
+    const ctx = await loadContext(userId);
     const day = buildDay(dateIso, ctx);
 
     if (day.is_holiday) {
@@ -146,16 +163,19 @@ router.get('/today', auth, async (req, res) => {
   }
 });
 
-// GET /api/schedule/week — settimana corrente, Lunedì-Domenica
-router.get('/week', auth, async (req, res) => {
+// GET /api/schedule/week — pubblica, settimana corrente Lunedì-Domenica
+router.get('/week', async (req, res) => {
   try {
+    const userId = await resolveUserId(req);
+    if (!userId) return res.status(404).json({ error: 'Utente non trovato' });
+
     const todayIso = todayIsoRome();
     const [y, m, d] = todayIso.split('-').map(Number);
     const dow = new Date(y, m - 1, d).getDay(); // 0 = Domenica
     const mondayOffset = dow === 0 ? -6 : 1 - dow;
     const monday = addDays(todayIso, mondayOffset);
 
-    const ctx = await loadContext(req.user.id);
+    const ctx = await loadContext(userId);
     const days = Array.from({ length: 7 }, (_, i) => buildDay(addDays(monday, i), ctx));
 
     res.json({ week_start: monday, days });

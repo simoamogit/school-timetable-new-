@@ -1268,14 +1268,15 @@ export default function TimetablePage({ user, onLogout, theme, onThemeChange, is
   const removeExtraHour = () => { const v = extraHours - 1; setExtraHours(v); localStorage.setItem('extra_hours', v); setFabOpen(false); };
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg)' }}>
+    <div style={{ minHeight: '100vh', background: 'var(--bg)', paddingTop: 'var(--header-h)' }}>
 
-      {/* ── Navbar ── */}
+      {/* ── Navbar: fixed (non sticky) così resta sempre visibile senza
+          dipendere dal contenitore di scroll di una pagina o di un antenato */}
       <header style={{
         background: 'var(--surface-container)', borderBottom: '1px solid var(--border)',
         padding: '0 var(--space-200)', height: 'var(--header-h)',
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        position: 'sticky', top: 0, zIndex: 50
+        position: 'fixed', top: 0, left: 0, right: 0, zIndex: 50
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <span style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--text3)', letterSpacing: '0.1em' }}>
