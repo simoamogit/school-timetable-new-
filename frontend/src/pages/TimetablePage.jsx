@@ -391,8 +391,8 @@ function CellModal({ cell, hours, isLocked, notes, substitutions, initialTab,
 
   return (
     <div className="overlay" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="modal" style={{ display: 'flex', flexDirection: 'column', paddingBottom: 0 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 'var(--space-200)' }}>
+      <div className="modal" style={{ display: 'flex', flexDirection: 'column', maxHeight: '88vh', padding: 0, overflow: 'hidden' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '20px 20px 0' }}>
           <div>
             <div style={{
               fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--text3)',
@@ -408,7 +408,11 @@ function CellModal({ cell, hours, isLocked, notes, substitutions, initialTab,
           <button onClick={onClose} className="btn-icon"><Icon name="close" /></button>
         </div>
 
-        <div>
+        {/* Zona centrale: scrolla SOLO se il contenuto non entra nei 88vh
+            disponibili (min-height:0 è essenziale perché un figlio flex si
+            restringa invece di forzare la modal a crescere all'infinito).
+            Con contenuti normali non compare nessuna barra di scorrimento. */}
+        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '16px 20px 0' }}>
           {tab === 'edit' && (
             <div>
               <div style={{ display: 'flex', gap: 6, marginBottom: 'var(--space-200)' }}>
@@ -621,7 +625,7 @@ function CellModal({ cell, hours, isLocked, notes, substitutions, initialTab,
           )}
         </div>
 
-        <div style={{ margin: '12px -20px -20px', padding: '8px 12px calc(8px + env(safe-area-inset-bottom,0px))', borderTop: '1px solid var(--outline-variant)' }}>
+        <div style={{ padding: '12px 20px calc(12px + env(safe-area-inset-bottom,0px))', borderTop: '1px solid var(--outline-variant)', flexShrink: 0 }}>
           <div className="bottom-nav" style={{ boxShadow: 'none', background: 'transparent' }}>
             {tabs.map(t => (
               <button key={t.id} className={`bottom-nav-item${tab === t.id ? ' active' : ''}`} onClick={() => setTab(t.id)}>
@@ -706,13 +710,13 @@ function SettingsPanel({ onClose, onReset, onExport, onImport, isLocked, onToggl
 
   return (
     <div className="overlay" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="modal" style={{ maxWidth: 440, display: 'flex', flexDirection: 'column', paddingBottom: 0 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-200)' }}>
+      <div className="modal" style={{ maxWidth: 440, display: 'flex', flexDirection: 'column', maxHeight: '88vh', padding: 0, overflow: 'hidden' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 20px 0' }}>
           <h2 style={{ fontSize: 20, fontWeight: 400 }}>Impostazioni</h2>
           <button onClick={onClose} className="btn-icon"><Icon name="close" /></button>
         </div>
 
-        <div>
+        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '16px 20px 0' }}>
           {tab === 'general' && (
             <div>
               <div style={{
@@ -983,7 +987,7 @@ function SettingsPanel({ onClose, onReset, onExport, onImport, isLocked, onToggl
           )}
         </div>
 
-        <div style={{ margin: '12px -20px -20px', padding: '8px 12px calc(8px + env(safe-area-inset-bottom,0px))', borderTop: '1px solid var(--outline-variant)' }}>
+        <div style={{ padding: '12px 20px calc(12px + env(safe-area-inset-bottom,0px))', borderTop: '1px solid var(--outline-variant)', flexShrink: 0 }}>
           <div className="bottom-nav" style={{ boxShadow: 'none', background: 'transparent' }}>
             {settingsTabs.map(t => (
               <button key={t.id} className={`bottom-nav-item${tab === t.id ? ' active' : ''}`}

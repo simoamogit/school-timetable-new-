@@ -80,7 +80,7 @@ function buildDay(dateIso, ctx) {
       date: dateIso,
       day_name: dayName,
       is_holiday: true,
-      holiday_name: vacation ? vacation.name : null,
+      holiday_name: vacation ? vacation.name : 'Fine settimana',
       exit_time: null,
       events: [],
     };
