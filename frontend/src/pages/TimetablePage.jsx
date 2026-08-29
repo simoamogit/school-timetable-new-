@@ -7,7 +7,7 @@ import LoadingIndicator from '../components/LoadingIndicator.jsx';
 import TextField from '../components/TextField.jsx';
 import { useSnackbar } from '../components/SnackbarProvider.jsx';
 import { useConfirm } from '../components/ConfirmProvider.jsx';
-import { SUBJECT_COLORS, VACATION_COLORS } from '../constants/colors.js';
+import { SUBJECT_COLORS, VACATION_COLORS, getContrastText } from '../constants/colors.js';
 
 function getWeekDates() {
   const today = new Date();
@@ -186,7 +186,8 @@ function TimetableCell({ day, hour, slot, cellNotes, cellSubs, isLocked, isDragO
       ) : (
         <>
           <span style={{
-            fontSize: 11, fontWeight: 600, color: 'var(--text)', lineHeight: 1.2, textAlign: 'center',
+            fontSize: 11, fontWeight: 600, color: isEmpty || isFree || hasSub ? 'var(--text)' : getContrastText(slot.color),
+            lineHeight: 1.2, textAlign: 'center',
             maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', padding: '0 4px',
           }}>
             {slot.subject}
@@ -407,7 +408,7 @@ function CellModal({ cell, hours, isLocked, notes, substitutions, initialTab,
           <button onClick={onClose} className="btn-icon"><Icon name="close" /></button>
         </div>
 
-        <div style={{ flex: 1, overflowY: 'auto', minHeight: 240 }}>
+        <div>
           {tab === 'edit' && (
             <div>
               <div style={{ display: 'flex', gap: 6, marginBottom: 'var(--space-200)' }}>
@@ -439,7 +440,7 @@ function CellModal({ cell, hours, isLocked, notes, substitutions, initialTab,
                     background: color, padding: '10px 14px', marginBottom: 'var(--space-200)',
                     borderRadius: 'var(--radius-md)'
                   }}>
-                    <span style={{ fontWeight: 600, fontSize: 14, color: 'var(--text)' }}>{subject || 'Anteprima'}</span>
+                    <span style={{ fontWeight: 600, fontSize: 14, color: getContrastText(color) }}>{subject || 'Anteprima'}</span>
                   </div>
                 </>
               )}
@@ -711,7 +712,7 @@ function SettingsPanel({ onClose, onReset, onExport, onImport, isLocked, onToggl
           <button onClick={onClose} className="btn-icon"><Icon name="close" /></button>
         </div>
 
-        <div style={{ flex: 1, overflowY: 'auto', minHeight: 280 }}>
+        <div>
           {tab === 'general' && (
             <div>
               <div style={{
@@ -737,34 +738,43 @@ function SettingsPanel({ onClose, onReset, onExport, onImport, isLocked, onToggl
                 </div>
               </div>
 
+              {/* Toggle come intere card cliccabili: colore e icona riflettono lo stato */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-150)', marginBottom: 'var(--space-200)' }}>
-                <div className="setting-box">
-                  <div className="icon-circle"><Icon name={theme === 'dark' ? 'dark_mode' : 'light_mode'} size={20} /></div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div>
-                      <div style={{ fontSize: 13, fontWeight: 500 }}>Tema scuro</div>
-                      <div style={{ fontSize: 11, color: 'var(--text3)' }}>Modalità scura</div>
-                    </div>
-                    <label className="toggle">
-                      <input type="checkbox" checked={theme === 'dark'}
-                        onChange={e => onThemeChange(e.target.checked ? 'dark' : 'light')} />
-                      <span className="toggle-slider" />
-                    </label>
+                <button
+                  onClick={() => onThemeChange(theme === 'dark' ? 'light' : 'dark')}
+                  className="setting-box"
+                  style={{
+                    alignItems: 'flex-start', textAlign: 'left', cursor: 'pointer',
+                    background: theme === 'dark' ? '#2B2B31' : '#FFE9A0',
+                    color: theme === 'dark' ? '#E8E3EC' : '#5C4700',
+                  }}>
+                  <div className="icon-circle" style={{
+                    background: theme === 'dark' ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.08)',
+                    color: 'inherit'
+                  }}>
+                    <Icon name={theme === 'dark' ? 'dark_mode' : 'light_mode'} size={20} filled />
                   </div>
-                </div>
-                <div className="setting-box">
-                  <div className="icon-circle"><Icon name={isLocked ? 'lock' : 'lock_open'} size={20} /></div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div>
-                      <div style={{ fontSize: 13, fontWeight: 500 }}>Blocca orario</div>
-                      <div style={{ fontSize: 11, color: 'var(--text3)' }}>Solo note e suppl.</div>
-                    </div>
-                    <label className="toggle">
-                      <input type="checkbox" checked={isLocked} onChange={onToggleLock} />
-                      <span className="toggle-slider" />
-                    </label>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 600 }}>Tema {theme === 'dark' ? 'scuro' : 'chiaro'}</div>
+                    <div style={{ fontSize: 11, opacity: 0.75 }}>Tocca per cambiare</div>
                   </div>
-                </div>
+                </button>
+                <button
+                  onClick={onToggleLock}
+                  className="setting-box"
+                  style={{
+                    alignItems: 'flex-start', textAlign: 'left', cursor: 'pointer',
+                    background: isLocked ? '#FFB4AA' : '#BFEAC0',
+                    color: isLocked ? '#410002' : '#0B3D13',
+                  }}>
+                  <div className="icon-circle" style={{ background: 'rgba(0,0,0,0.08)', color: 'inherit' }}>
+                    <Icon name={isLocked ? 'lock' : 'lock_open'} size={20} filled />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 600 }}>{isLocked ? 'Bloccato' : 'Sbloccato'}</div>
+                    <div style={{ fontSize: 11, opacity: 0.75 }}>Tocca per cambiare</div>
+                  </div>
+                </button>
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>

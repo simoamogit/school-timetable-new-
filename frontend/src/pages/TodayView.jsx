@@ -1,5 +1,5 @@
-// frontend/src/pages/TodayView.jsx
 import { useState, useEffect } from 'react';
+import { getContrastText } from '../constants/colors.js';
 
 function getTomorrowDate() {
   const d = new Date();
@@ -126,7 +126,8 @@ export default function TodayView({ settings, slots, notes, substitutions, vacat
               : (slot?.color || 'var(--surface-container)');
             const cardFg = hasSub ? 'var(--on-warning-container)'
               : isFree ? 'var(--on-free-container)'
-              : 'var(--text)';
+              : isEmpty ? 'var(--text)'
+              : getContrastText(slot?.color);
 
             return (
               <div

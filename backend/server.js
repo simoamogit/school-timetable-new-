@@ -1,4 +1,3 @@
-// server.js — sostituisci il file alla root del backend
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
@@ -12,6 +11,7 @@ app.use(express.json());
 
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/timetable', require('./routes/timetable'));
+app.use('/api/schedule', require('./routes/schedule'));
 
 // Endpoint leggero per verificare velocemente se il backend è raggiungibile,
 // senza dipendere dal database. Utile in futuro per un debug rapido
