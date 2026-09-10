@@ -560,6 +560,7 @@ button {
 .datepicker-day {
   aspect-ratio: 1; display: flex; align-items: center; justify-content: center;
   border-radius: 50%; font-size: 13px; color: var(--text); cursor: pointer; border: none; background: none;
+  padding: 0; min-width: 0; width: 100%;
   transition: background-color var(--motion-effects-fast);
 }
 .datepicker-day:hover { background: color-mix(in srgb, var(--text) 8%, transparent); }

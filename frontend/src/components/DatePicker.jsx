@@ -43,7 +43,7 @@ function Calendar({ selected, min, onPick, onClose }) {
         <div className="datepicker-header">
           <div className="label-sm">Seleziona data</div>
           <div className="headline">
-            <span style={{ textTransform: 'capitalize' }}>{headline}</span>
+            <span style={pending ? { textTransform: 'capitalize' } : undefined}>{headline}</span>
             <span className="icon" style={{ fontSize: 20, color: 'var(--text2)' }}>edit</span>
           </div>
         </div>
