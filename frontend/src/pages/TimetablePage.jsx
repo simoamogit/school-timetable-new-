@@ -165,11 +165,20 @@ function TimetableCell({ day, hour, slot, cellNotes, cellSubs, isLocked, isDragO
           </button>
 
           <span style={{
-            flex: 1, fontSize: 9, textAlign: 'center', overflow: 'hidden',
-            textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-            fontWeight: current.kind === 'sub' ? 700 : 500,
+            flex: 1, fontSize: 9, textAlign: 'center', overflow: 'hidden', minWidth: 0,
+            display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: 3,
           }}>
-            {current.kind === 'sub' ? current.data.substitute : current.data.content}
+            <span style={{
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              fontWeight: current.kind === 'sub' ? 700 : 500,
+            }}>
+              {current.kind === 'sub' ? current.data.substitute : current.data.content}
+            </span>
+            {current.date && (
+              <span style={{ fontSize: 7, opacity: 0.75, fontFamily: 'var(--mono)', flexShrink: 0 }}>
+                {new Date(current.date).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' })}
+              </span>
+            )}
           </span>
 
           <button
