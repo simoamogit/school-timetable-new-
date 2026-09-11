@@ -1,4 +1,3 @@
-// backend/routes/timetable.js — SOSTITUISCI INTERAMENTE il file esistente con questo
 const express = require('express');
 const crypto = require('crypto');
 const { pool } = require('../db/database');
@@ -17,8 +16,14 @@ async function logChange(userId, action, details) {
 }
 
 // --- Helper: cleanup scaduti ---
+function todayIsoRome() {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Rome', year: 'numeric', month: '2-digit', day: '2-digit'
+  }).format(new Date());
+}
+
 async function cleanupExpired(userId) {
-  const today = new Date().toISOString().split('T')[0];
+  const today = todayIsoRome();
   await pool.query(`DELETE FROM notes WHERE user_id=$1 AND note_date IS NOT NULL AND note_date < $2`, [userId, today]);
   await pool.query(`DELETE FROM substitutions WHERE user_id=$1 AND sub_date < $2`, [userId, today]);
 }
@@ -28,46 +33,6 @@ async function cleanupExpired(userId) {
 // =====================
 
 router.get('/health', (req, res) => res.json({ ok: true, ts: Date.now() }));
-
-// Vista pubblica di un orario condiviso via link. QUESTA ROTTA MANCAVA DEL
-// TUTTO: il frontend (ShareView.jsx) chiama GET /timetable/view/:token da
-// sempre, ma nessun handler corrispondente esisteva sul backend. La
-// richiesta cadeva quindi nel router.use(auth) qui sotto, che blocca con
-// 401 "Token mancante" (perché la pagina di condivisione, giustamente, non
-// invia nessun token di login) — da qui il "link disattivato" anche per
-// link appena creati e validi. Deve stare qui, PRIMA di router.use(auth),
-// perché non richiede login: chiunque abbia il link deve poterla vedere.
-router.get('/view/:token', async (req, res) => {
-  try {
-    const shareRes = await pool.query('SELECT user_id FROM share_tokens WHERE token=$1', [req.params.token]);
-    const share = shareRes.rows[0];
-    if (!share) return res.status(404).json({ error: 'Link non valido o scaduto' });
-
-    const userId = share.user_id;
-    const [uR, sR, slR, nR, subR] = await Promise.all([
-      pool.query('SELECT username FROM users WHERE id=$1', [userId]),
-      pool.query('SELECT * FROM user_settings WHERE user_id=$1', [userId]),
-      pool.query('SELECT day, hour, subject, color, slot_type FROM slots WHERE user_id=$1', [userId]),
-      pool.query('SELECT id, day, hour, content, note_date, created_at FROM notes WHERE user_id=$1', [userId]),
-      pool.query('SELECT id, day, hour, hour_to, substitute, sub_date, note FROM substitutions WHERE user_id=$1', [userId]),
-    ]);
-    const s = sR.rows[0];
-    res.json({
-      username: uR.rows[0]?.username || 'Utente',
-      avatarColor: s?.avatar_color || '#435CC8',
-      settings: {
-        schoolDays: JSON.parse(s?.school_days || '[]'),
-        hoursPerDay: s?.hours_per_day || 6,
-      },
-      slots: slR.rows,
-      notes: nR.rows,
-      substitutions: subR.rows,
-    });
-  } catch (e) {
-    console.error(e);
-    res.status(500).json({ error: 'Errore server' });
-  }
-});
 
 // =====================
 // ROTTE PROTETTE
@@ -137,8 +102,9 @@ router.post('/settings', async (req, res) => {
 router.post('/settings/reset', async (req, res) => {
   // FIX: prima si azzeravano solo le impostazioni (giorni/ore) ma le materie
   // in `slots` restavano nel database — il frontend però promette esplicitamente
-  // "cancellerà tutte le materie". Ora la cancellazione degli slot e il reset
-  // delle impostazioni avvengono nella stessa transazione.
+  // "cancellerà tutte le materie". Ora la cancellazione dei slot e il reset
+  // delle impostazioni avvengono nella stessa transazione, così sono sempre
+  // coerenti tra loro (o vanno a buon fine entrambi, o nessuno dei due).
   const client = await pool.connect();
   try {
     await client.query('BEGIN');

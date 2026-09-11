@@ -107,8 +107,7 @@ function TimetableCell({ day, hour, slot, cellNotes, cellSubs, isLocked, isDragO
       onClick={onClick}
       className={[
         isDragOver ? 'cell-drag-over' : '',
-        isDragging ? 'cell-dragging' : '',
-        isFree ? 'cell-free' : ''
+        isDragging ? 'cell-dragging' : ''
       ].join(' ')}
       style={{
         display: 'flex', flexDirection: 'column', gap: 3, cursor: 'pointer',
@@ -148,25 +147,25 @@ function TimetableCell({ day, hour, slot, cellNotes, cellSubs, isLocked, isDragO
           più di una. */}
       {items.length > 0 && (
         <div style={{
-          display: 'flex', alignItems: 'center', gap: 1,
+          display: 'flex', alignItems: 'stretch', gap: 0,
           background: current.kind === 'sub' ? 'var(--warning-container)' : 'var(--surface-container-high)',
           color: current.kind === 'sub' ? 'var(--on-warning-container)' : 'var(--text2)',
-          borderRadius: 'var(--radius-sm)', minHeight: 22, padding: '0 1px',
+          borderRadius: 'var(--radius-sm)', minHeight: 26,
         }}>
           <button
             onClick={e => changePage(e, -1)}
             style={{
-              minWidth: 16, minHeight: 20, padding: 0, background: 'none', border: 'none', flexShrink: 0,
+              minWidth: 22, padding: 0, background: 'none', border: 'none', flexShrink: 0,
               color: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center',
               opacity: items.length > 1 ? 0.85 : 0, pointerEvents: items.length > 1 ? 'auto' : 'none',
             }}
           >
-            <Icon name="chevron_left" size={12} />
+            <Icon name="chevron_left" size={13} />
           </button>
 
           <span style={{
             flex: 1, fontSize: 9, textAlign: 'center', overflow: 'hidden', minWidth: 0,
-            display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: 3,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 3,
           }}>
             <span style={{
               overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
@@ -184,12 +183,12 @@ function TimetableCell({ day, hour, slot, cellNotes, cellSubs, isLocked, isDragO
           <button
             onClick={e => changePage(e, 1)}
             style={{
-              minWidth: 16, minHeight: 20, padding: 0, background: 'none', border: 'none', flexShrink: 0,
+              minWidth: 22, padding: 0, background: 'none', border: 'none', flexShrink: 0,
               color: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center',
               opacity: items.length > 1 ? 0.85 : 0, pointerEvents: items.length > 1 ? 'auto' : 'none',
             }}
           >
-            <Icon name="chevron_right" size={12} />
+            <Icon name="chevron_right" size={13} />
           </button>
         </div>
       )}
@@ -1025,7 +1024,9 @@ export default function TimetablePage({ user, onLogout, theme, onThemeChange, is
     return vacations.find(v => date >= v.start_date && date <= v.end_date) || null;
   }, [vacations, weekDates]);
   const [showSettings, setShowSettings] = useState(false);
-  const [view, setView] = useState('week');
+  const [view, setView] = useState(
+    () => (typeof window !== 'undefined' && window.innerWidth < 700) ? 'today' : 'week'
+  );
   const [dragFrom, setDragFrom] = useState(null);
   const [dragOver, setDragOver] = useState(null);
   const [timetableHidden, setTimetableHidden] = useState(
@@ -1412,7 +1413,7 @@ export default function TimetablePage({ user, onLogout, theme, onThemeChange, is
           </button>
         </div>
       ) : (
-        <div style={{ padding: 12, overflowX: 'auto', paddingBottom: 120 }}>
+        <div style={{ padding: 12, overflowX: 'auto', paddingBottom: 120, WebkitOverflowScrolling: 'touch' }}>
           <div style={{
             display: 'grid',
             gridTemplateColumns: `44px repeat(${days.length}, minmax(90px, 1fr))`,
@@ -1471,19 +1472,19 @@ export default function TimetablePage({ user, onLogout, theme, onThemeChange, is
                     borderRadius: 'var(--radius-md)', position: 'relative', minHeight: 44, cursor: 'default'
                   }}
                   onMouseEnter={e => { const b = e.currentTarget.querySelector('.hhb'); if (b) b.style.opacity = '1'; }}
-                  onMouseLeave={e => { const b = e.currentTarget.querySelector('.hhb'); if (b) b.style.opacity = '0'; }}>
+                  onMouseLeave={e => { const b = e.currentTarget.querySelector('.hhb'); if (b) b.style.opacity = '0.45'; }}>
                   <span style={{ fontFamily: 'var(--mono)', fontSize: 12, fontWeight: 600, color: 'var(--text2)' }}>
                     {hour}
                   </span>
                   <button className="hhb" onClick={() => toggleHideHour(hour)}
                     title={`Nascondi ora ${hour}`}
                     style={{
-                      position: 'absolute', top: 2, right: 2, width: 16, height: 16, minWidth: 0, minHeight: 0,
+                      position: 'absolute', top: 2, right: 2, width: 22, height: 22, minWidth: 0, minHeight: 0,
                       fontSize: 10, background: 'var(--surface-container-highest)', border: 'none', borderRadius: '50%',
                       color: 'var(--text3)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      opacity: 0, transition: 'opacity var(--motion-effects-fast)', cursor: 'pointer', padding: 0, lineHeight: 1
+                      opacity: 0.45, transition: 'opacity var(--motion-effects-fast)', cursor: 'pointer', padding: 0, lineHeight: 1
                     }}>
-                    <Icon name="close" size={11} />
+                    <Icon name="close" size={12} />
                   </button>
                 </div>
 

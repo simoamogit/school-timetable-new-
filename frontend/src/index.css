@@ -425,11 +425,13 @@ button {
 }
 
 /* Drag & drop */
-.cell-drag-over { outline: 2px solid var(--primary) !important; outline-offset: -2px; background: color-mix(in srgb, var(--primary) 10%, transparent) !important; }
+.cell-drag-over { outline: 2px solid var(--primary) !important; outline-offset: -2px; }
 .cell-dragging { opacity: 0.35; }
 
-/* Free slot */
-.cell-free { background: var(--free-container) !important; border-color: var(--free) !important; }
+/* Free slot: NON più usata sul contenitore esterno della cella (vedi
+   TimetableCell in TimetablePage.jsx) — lo sfondo "libera" è ora sempre
+   inline sul box interno, per evitare che si estenda su tutta l'altezza
+   stirata della riga quando una cella vicina ha note/supplenze. */
 
 /* Shortcut badge */
 .shortcut-badge {
@@ -560,7 +562,6 @@ button {
 .datepicker-day {
   aspect-ratio: 1; display: flex; align-items: center; justify-content: center;
   border-radius: 50%; font-size: 13px; color: var(--text); cursor: pointer; border: none; background: none;
-  padding: 0; min-width: 0; width: 100%;
   transition: background-color var(--motion-effects-fast);
 }
 .datepicker-day:hover { background: color-mix(in srgb, var(--text) 8%, transparent); }
