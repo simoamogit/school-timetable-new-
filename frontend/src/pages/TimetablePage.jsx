@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { createPortal } from 'react-dom';
 import api from '../api/index.js';
 import TodayView from './TodayView.jsx';
 import DatePicker from '../components/DatePicker.jsx';
@@ -68,66 +67,35 @@ function ClockWidget() {
   );
 }
 
-// ─── NoteTooltip ─────────────────────────────────────────────────────────────
-function NoteTooltip({ notes }) {
-  const [visible, setVisible] = useState(false);
-  const [rect, setRect] = useState(null);
-  const ref = useRef(null);
-  if (!notes.length) return null;
-  const handleEnter = () => { if (ref.current) setRect(ref.current.getBoundingClientRect()); setVisible(true); };
-  return (
-    <>
-      <span ref={ref} onMouseEnter={handleEnter} onMouseLeave={() => setVisible(false)}
-        style={{
-          fontFamily: 'var(--mono)', fontSize: 10, fontWeight: 600,
-          background: 'rgba(0,0,0,0.25)', borderRadius: 'var(--radius-xs)', padding: '1px 5px',
-          color: 'white', cursor: 'default', userSelect: 'none'
-        }}>
-        {notes.length}n
-      </span>
-      {visible && rect && createPortal(
-        <div style={{
-          position: 'fixed',
-          left: Math.min(Math.max(rect.left + rect.width / 2, 130), window.innerWidth - 130),
-          ...(rect.top > 180 ? { bottom: window.innerHeight - rect.top + 8 } : { top: rect.bottom + 8 }),
-          transform: 'translateX(-50%)',
-          background: 'var(--surface-container-high)', borderRadius: 'var(--radius-md)',
-          padding: '10px 12px', width: 240, zIndex: 9999,
-          boxShadow: 'var(--elevation-3)', pointerEvents: 'none'
-        }}>
-          <div style={{
-            fontSize: 10, fontWeight: 700, color: 'var(--text3)', marginBottom: 8,
-            textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: 'var(--mono)'
-          }}>
-            Note
-          </div>
-          {notes.map((n, i) => (
-            <div key={n.id} style={{
-              fontSize: 12, color: 'var(--text)', lineHeight: 1.5,
-              borderTop: i > 0 ? '1px solid var(--border)' : 'none',
-              paddingTop: i > 0 ? 8 : 0, marginTop: i > 0 ? 8 : 0
-            }}>
-              {n.content}
-              {n.note_date && <div style={{ fontSize: 10, color: 'var(--text3)', marginTop: 2, fontFamily: 'var(--mono)' }}>
-                {new Date(n.note_date).toLocaleDateString('it-IT')}
-              </div>}
-            </div>
-          ))}
-        </div>, document.body
-      )}
-    </>
-  );
-}
-
 // ─── TimetableCell ────────────────────────────────────────────────────────────
 function TimetableCell({ day, hour, slot, cellNotes, cellSubs, isLocked, isDragOver, isDragging,
   vacation, onClick, onDragStart, onDragOver, onDragLeave, onDrop }) {
   const isEmpty = !slot?.subject && slot?.slot_type !== 'free';
   const isFree = slot?.slot_type === 'free';
-  const latestSub = cellSubs.length
-    ? [...cellSubs].sort((a, b) => new Date(a.sub_date) - new Date(b.sub_date))[0]
-    : null;
-  const hasSub = !!latestSub;
+
+  // Note e supplenze unite in un'unica lista, ordinata dalla scadenza più
+  // vicina alla più lontana. Le note senza data (nessuna scadenza) finiscono
+  // in fondo, dopo tutte quelle datate.
+  const items = useMemo(() => {
+    const noteItems = cellNotes.map(n => ({ kind: 'note', date: n.note_date, data: n }));
+    const subItems = cellSubs.map(s => ({ kind: 'sub', date: s.sub_date, data: s }));
+    return [...noteItems, ...subItems].sort((a, b) => {
+      if (a.date && b.date) return new Date(a.date) - new Date(b.date);
+      if (a.date) return -1;
+      if (b.date) return 1;
+      return 0;
+    });
+  }, [cellNotes, cellSubs]);
+
+  const [pagerIndex, setPagerIndex] = useState(0);
+  const idx = items.length ? pagerIndex % items.length : 0;
+  const current = items[idx];
+
+  const changePage = (e, delta) => {
+    e.stopPropagation();
+    if (items.length < 2) return;
+    setPagerIndex(p => (p + delta + items.length) % items.length);
+  };
 
   return (
     <div
@@ -143,62 +111,83 @@ function TimetableCell({ day, hour, slot, cellNotes, cellSubs, isLocked, isDragO
         isFree ? 'cell-free' : ''
       ].join(' ')}
       style={{
-        background: hasSub ? 'var(--warning-container)' : isFree ? 'var(--free-container)' : isEmpty ? 'var(--surface-container-low)' : slot.color,
-        border: isEmpty ? '1px dashed var(--outline-variant)' : 'none',
-        borderRadius: 'var(--radius-md)', padding: '6px 4px', cursor: 'pointer', minHeight: 72,
-        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-        gap: 3, position: 'relative', transition: `opacity var(--motion-effects-fast), transform var(--motion-spatial-fast)`, userSelect: 'none',
-        opacity: vacation ? 0.6 : 1,
+        display: 'flex', flexDirection: 'column', gap: 3, cursor: 'pointer',
+        userSelect: 'none', opacity: vacation ? 0.6 : 1,
+        transition: `opacity var(--motion-effects-fast)`, position: 'relative',
       }}
       onMouseEnter={e => { e.currentTarget.style.opacity = '0.85'; }}
       onMouseLeave={e => { e.currentTarget.style.opacity = vacation ? '0.6' : '1'; }}
     >
-      {isFree && !hasSub ? (
-        <span style={{
-          fontSize: 9, color: 'var(--on-free-container)', fontFamily: 'var(--mono)',
-          fontWeight: 700, letterSpacing: '0.05em'
-        }}>LIBERA</span>
-      ) : isEmpty && !hasSub ? (
-        <Icon name={isLocked ? 'lock' : 'add'} size={16} style={{ color: 'var(--outline)' }} />
-      ) : hasSub ? (
-        <>
-          {slot?.subject && (
-            <span style={{
-              fontSize: 9, color: 'var(--on-warning-container)', opacity: 0.7, textDecoration: 'line-through',
-              maxWidth: '100%', overflow: 'hidden',
-              textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: 'var(--mono)'
-            }}>
-              {slot.subject}
-            </span>
-          )}
+      {/* Materia dell'ora: sempre quella "base" dell'orario, indipendente
+          dalle supplenze — quelle vivono ora nel box sotto */}
+      <div style={{
+        background: isFree ? 'var(--free-container)' : isEmpty ? 'var(--surface-container-low)' : slot.color,
+        border: isEmpty ? '1px dashed var(--outline-variant)' : 'none',
+        borderRadius: 'var(--radius-md)', padding: '6px 4px', minHeight: 56,
+        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+      }}>
+        {isFree ? (
           <span style={{
-            fontSize: 11, fontWeight: 700, color: 'var(--on-warning-container)', textAlign: 'center',
-            lineHeight: 1.2, maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap', padding: '0 3px'
-          }}>
-            {latestSub.substitute}
-          </span>
-          <span style={{ fontSize: 9, color: 'var(--on-warning-container)', opacity: 0.7, fontFamily: 'var(--mono)' }}>
-            {new Date(latestSub.sub_date).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' })}
-          </span>
-          {cellNotes.length > 0 && <div onClick={e => e.stopPropagation()}><NoteTooltip notes={cellNotes} /></div>}
-        </>
-      ) : (
-        <>
+            fontSize: 9, color: 'var(--on-free-container)', fontFamily: 'var(--mono)',
+            fontWeight: 700, letterSpacing: '0.05em'
+          }}>LIBERA</span>
+        ) : isEmpty ? (
+          <Icon name={isLocked ? 'lock' : 'add'} size={16} style={{ color: 'var(--outline)' }} />
+        ) : (
           <span style={{
-            fontSize: 11, fontWeight: 600, color: isEmpty || isFree || hasSub ? 'var(--text)' : getContrastText(slot.color),
-            lineHeight: 1.2, textAlign: 'center',
+            fontSize: 11, fontWeight: 600, color: getContrastText(slot.color), lineHeight: 1.2, textAlign: 'center',
             maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', padding: '0 4px',
           }}>
             {slot.subject}
           </span>
-          {cellNotes.length > 0 && <div onClick={e => e.stopPropagation()}><NoteTooltip notes={cellNotes} /></div>}
-        </>
+        )}
+      </div>
+
+      {/* Box note/supplenze: SEMPRE visibile (mai a hover), una alla volta,
+          ordinate per data più vicina. Le frecce funzionano solo se ce n'è
+          più di una. */}
+      {items.length > 0 && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 1,
+          background: current.kind === 'sub' ? 'var(--warning-container)' : 'var(--surface-container-high)',
+          color: current.kind === 'sub' ? 'var(--on-warning-container)' : 'var(--text2)',
+          borderRadius: 'var(--radius-sm)', minHeight: 22, padding: '0 1px',
+        }}>
+          <button
+            onClick={e => changePage(e, -1)}
+            style={{
+              minWidth: 16, minHeight: 20, padding: 0, background: 'none', border: 'none', flexShrink: 0,
+              color: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              opacity: items.length > 1 ? 0.85 : 0, pointerEvents: items.length > 1 ? 'auto' : 'none',
+            }}
+          >
+            <Icon name="chevron_left" size={12} />
+          </button>
+
+          <span style={{
+            flex: 1, fontSize: 9, textAlign: 'center', overflow: 'hidden',
+            textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            fontWeight: current.kind === 'sub' ? 700 : 500,
+          }}>
+            {current.kind === 'sub' ? current.data.substitute : current.data.content}
+          </span>
+
+          <button
+            onClick={e => changePage(e, 1)}
+            style={{
+              minWidth: 16, minHeight: 20, padding: 0, background: 'none', border: 'none', flexShrink: 0,
+              color: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              opacity: items.length > 1 ? 0.85 : 0, pointerEvents: items.length > 1 ? 'auto' : 'none',
+            }}
+          >
+            <Icon name="chevron_right" size={12} />
+          </button>
+        </div>
       )}
 
       {vacation && (
         <div style={{
-          position: 'absolute', inset: 0,
+          position: 'absolute', top: 0, left: 0, right: 0, height: 56,
           background: `color-mix(in srgb, ${vacation.color} 6%, transparent)`,
           borderRadius: 'var(--radius-md)', pointerEvents: 'none',
           display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
