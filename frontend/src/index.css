@@ -320,7 +320,7 @@ button {
 
 /* --- Overlay + Modal: M3 dialog / bottom sheet (shape extra-large) --- */
 .overlay {
-  position: fixed; inset: 0;
+  position: fixed; top: 0; left: 0; right: 0; height: 100dvh;
   background: rgba(0,0,0,0.4);
   z-index: 100;
   display: flex;
@@ -507,7 +507,8 @@ button {
    DIALOG (M3) — conferma centrata, sostituisce window.confirm
    ============================================================ */
 .dialog-overlay {
-  position: fixed; inset: 0; background: rgba(0,0,0,0.4);
+  position: fixed; top: 0; left: 0; right: 0; height: 100dvh;
+  background: rgba(0,0,0,0.4);
   z-index: 200; display: flex; align-items: center; justify-content: center; padding: 20px;
   animation: dialog-scrim-in var(--motion-effects-default) both;
 }
@@ -562,6 +563,7 @@ button {
 .datepicker-day {
   aspect-ratio: 1; display: flex; align-items: center; justify-content: center;
   border-radius: 50%; font-size: 13px; color: var(--text); cursor: pointer; border: none; background: none;
+  padding: 0; min-width: 0; width: 100%;
   transition: background-color var(--motion-effects-fast);
 }
 .datepicker-day:hover { background: color-mix(in srgb, var(--text) 8%, transparent); }

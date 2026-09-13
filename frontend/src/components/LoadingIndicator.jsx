@@ -1,4 +1,3 @@
-// frontend/src/components/LoadingIndicator.jsx — NUOVO FILE
 // Loading Indicator in stile M3 Expressive: la forma morfa continuamente tra
 // una serie di "blob" organici (approssimazione via curve Catmull-Rom→bezier
 // con la stessa topologia, quindi interpolabili) invece del classico spinner

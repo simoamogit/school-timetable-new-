@@ -8,6 +8,12 @@ import { useSnackbar } from '../components/SnackbarProvider.jsx';
 import { useConfirm } from '../components/ConfirmProvider.jsx';
 import { SUBJECT_COLORS, VACATION_COLORS, getContrastText } from '../constants/colors.js';
 
+// Su mobile/touch, autoFocus su un campo apre subito la tastiera virtuale
+// non appena si apre la modal — fastidioso se si voleva solo guardare i
+// dettagli. Su desktop invece è comodo poter scrivere subito.
+const isTouchDevice = typeof window !== 'undefined'
+  && (('ontouchstart' in window) || navigator.maxTouchPoints > 0);
+
 function getWeekDates() {
   const today = new Date();
   const dow = today.getDay();
@@ -243,7 +249,7 @@ function VacationModal({ onClose, onSave, existing }) {
         </div>
 
         <TextField label="Nome vacanza" placeholder="es. Natale, Pasqua, Estate..." value={name}
-          onChange={e => setName(e.target.value)} autoFocus
+          onChange={e => setName(e.target.value)} autoFocus={!isTouchDevice}
           onKeyDown={e => e.key === 'Enter' && save()} style={{ marginBottom: 'var(--space-200)' }} />
 
         <div className="form-row" style={{ marginBottom: 'var(--space-150)' }}>
@@ -388,7 +394,7 @@ function CellModal({ cell, hours, isLocked, notes, substitutions, initialTab,
 
   return (
     <div className="overlay" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="modal" style={{ display: 'flex', flexDirection: 'column', maxHeight: '88vh', padding: 0, overflow: 'hidden' }}>
+      <div className="modal" style={{ display: 'flex', flexDirection: 'column', maxHeight: '88dvh', padding: 0, overflow: 'hidden' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '20px 20px 0' }}>
           <div>
             <div style={{
@@ -425,7 +431,7 @@ function CellModal({ cell, hours, isLocked, notes, substitutions, initialTab,
                 <>
                   <TextField label="Nome materia" placeholder="es. Matematica" value={subject}
                     onChange={e => setSubject(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && saveSlot()} autoFocus style={{ marginBottom: 'var(--space-200)' }} />
+                    onKeyDown={e => e.key === 'Enter' && saveSlot()} autoFocus={!isTouchDevice} style={{ marginBottom: 'var(--space-200)' }} />
                   <div className="form-group">
                     <label className="label">Colore</label>
                     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
@@ -473,7 +479,7 @@ function CellModal({ cell, hours, isLocked, notes, substitutions, initialTab,
                 <label className="label">Nuova nota</label>
                 <textarea placeholder="Nota per questa lezione..." value={noteContent}
                   onChange={e => setNoteContent(e.target.value)} rows={3}
-                  style={{ resize: 'vertical' }} autoFocus />
+                  style={{ resize: 'vertical' }} autoFocus={!isTouchDevice} />
               </div>
               <div className="form-group">
                 <label className="label">Data (eliminata il giorno dopo)</label>
@@ -526,7 +532,7 @@ function CellModal({ cell, hours, isLocked, notes, substitutions, initialTab,
           {tab === 'subs' && (
             <div>
               <TextField label="Supplente / materia alternativa" placeholder="es. Prof. Rossi" value={subText}
-                onChange={e => setSubText(e.target.value)} autoFocus style={{ marginBottom: 'var(--space-150)' }} />
+                onChange={e => setSubText(e.target.value)} autoFocus={!isTouchDevice} style={{ marginBottom: 'var(--space-150)' }} />
               <div className="form-row">
                 <div className="form-group">
                   <label className="label">Ora inizio</label>
@@ -707,7 +713,7 @@ function SettingsPanel({ onClose, onReset, onExport, onImport, isLocked, onToggl
 
   return (
     <div className="overlay" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="modal" style={{ maxWidth: 440, display: 'flex', flexDirection: 'column', maxHeight: '88vh', padding: 0, overflow: 'hidden' }}>
+      <div className="modal" style={{ maxWidth: 440, display: 'flex', flexDirection: 'column', maxHeight: '88dvh', padding: 0, overflow: 'hidden' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 20px 0' }}>
           <h2 style={{ fontSize: 20, fontWeight: 400 }}>Impostazioni</h2>
           <button onClick={onClose} className="btn-icon"><Icon name="close" /></button>
@@ -1602,4 +1608,4 @@ export default function TimetablePage({ user, onLogout, theme, onThemeChange, is
       )}
     </div>
   );
-}
+}s

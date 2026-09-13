@@ -1,4 +1,3 @@
-// frontend/src/components/ConfirmProvider.jsx — NUOVO FILE
 import { createContext, useCallback, useContext, useRef, useState } from 'react';
 
 const ConfirmContext = createContext(null);
