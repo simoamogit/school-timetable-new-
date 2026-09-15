@@ -1608,4 +1608,4 @@ export default function TimetablePage({ user, onLogout, theme, onThemeChange, is
       )}
     </div>
   );
-}s
+}
