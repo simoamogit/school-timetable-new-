@@ -1,0 +1,28 @@
+# .github/workflows/keep-alive.yml
+#
+# Due fasce orarie, pensate per coprire mattina presto + orario scolastico
+# e la fascia serale (20:00-22:00). I cron di GitHub Actions usano sempre
+# UTC, mai l'ora locale, e l'Italia cambia fuso tra inverno (UTC+1) ed
+# estate (UTC+2): per non dover toccare il file due volte l'anno, le fasce
+# UTC qui sotto sono leggermente più larghe di quelle italiane richieste,
+# così coprono entrambe le stagioni senza buchi (qualche ping in più ai
+# bordi, in cambio di zero manutenzione).
+#
+#   05:30-14:00 (IT) -> 03:00-12:59 UTC (copre sia UTC+1 che UTC+2)
+#   20:00-22:00 (IT) -> 18:00-20:59 UTC (idem)
+#
+# Totale: ~13 ore/giorno, circa 390 ore/mese — ben dentro il tetto
+# gratuito di 750 ore/mese di Render.
+name: Keep backend awake
+
+on:
+  schedule:
+    - cron: '*/10 3-12,18-20 * * *'
+  workflow_dispatch:   # avvio manuale da GitHub, utile per testare subito
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping backend health endpoint
+        run: curl -fsS https://school-timetable-backend-yty1.onrender.com/api/health
