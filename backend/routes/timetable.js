@@ -2,6 +2,10 @@ const express = require('express');
 const crypto = require('crypto');
 const { pool } = require('../db/database');
 const auth = require('../middleware/auth');
+const rateLimit = require('../middleware/rateLimit');
+
+const NOTE_KINDS = ['note', 'homework', 'test'];
+const normKind = k => (NOTE_KINDS.includes(k) ? k : 'note');
 
 const router = express.Router();
 
@@ -22,9 +26,24 @@ function todayIsoRome() {
   }).format(new Date());
 }
 
+function isoDaysAgo(n) {
+  const [y, m, d] = todayIsoRome().split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d - n));
+  return dt.toISOString().slice(0, 10);
+}
+
 async function cleanupExpired(userId) {
   const today = todayIsoRome();
-  await pool.query(`DELETE FROM notes WHERE user_id=$1 AND note_date IS NOT NULL AND note_date < $2`, [userId, today]);
+  // Le note semplici scadono il giorno dopo; compiti/verifiche restano finché
+  // non vengono completati (e dopo il completamento restano 30 giorni, per le statistiche).
+  await pool.query(
+    `DELETE FROM notes WHERE user_id=$1 AND note_date IS NOT NULL AND note_date < $2 AND COALESCE(kind,'note')='note'`,
+    [userId, today]
+  );
+  await pool.query(
+    `DELETE FROM notes WHERE user_id=$1 AND note_date IS NOT NULL AND note_date < $2 AND COALESCE(kind,'note')<>'note' AND done=TRUE`,
+    [userId, isoDaysAgo(30)]
+  );
   await pool.query(`DELETE FROM substitutions WHERE user_id=$1 AND sub_date < $2`, [userId, today]);
 }
 
@@ -33,6 +52,40 @@ async function cleanupExpired(userId) {
 // =====================
 
 router.get('/health', (req, res) => res.json({ ok: true, ts: Date.now() }));
+
+// Vista condivisa in sola lettura (usata da /share/<token> nel frontend).
+// Era richiesta dal frontend ma non esisteva nel backend.
+router.get('/view/:token', rateLimit({ max: 60 }), async (req, res) => {
+  const { token } = req.params;
+  if (!/^[a-f0-9]{16,64}$/.test(token)) return res.status(404).json({ error: 'Link non valido o scaduto' });
+  try {
+    const t = await pool.query(
+      `SELECT u.id, u.username FROM share_tokens st JOIN users u ON u.id = st.user_id WHERE st.token=$1`,
+      [token]
+    );
+    const owner = t.rows[0];
+    if (!owner) return res.status(404).json({ error: 'Link non valido o scaduto' });
+    await cleanupExpired(owner.id);
+    const [sR, slR, nR, subR, vacR] = await Promise.all([
+      pool.query('SELECT * FROM user_settings WHERE user_id=$1', [owner.id]),
+      pool.query('SELECT day, hour, subject, color, slot_type FROM slots WHERE user_id=$1', [owner.id]),
+      pool.query('SELECT id, day, hour, content, note_date, kind, done FROM notes WHERE user_id=$1 ORDER BY created_at DESC', [owner.id]),
+      pool.query('SELECT id, day, hour, hour_to, substitute, sub_date, note FROM substitutions WHERE user_id=$1 ORDER BY sub_date DESC', [owner.id]),
+      pool.query('SELECT name, start_date, end_date, color FROM vacations WHERE user_id=$1 ORDER BY start_date', [owner.id]),
+    ]);
+    const s = sR.rows[0];
+    res.json({
+      username: owner.username,
+      avatarColor: s?.avatar_color || '#2563eb',
+      settings: {
+        schoolDays: JSON.parse(s?.school_days || '[]'),
+        hoursPerDay: s?.hours_per_day || 6,
+        hiddenHours: JSON.parse(s?.hidden_hours || '[]'),
+      },
+      slots: slR.rows, notes: nR.rows, substitutions: subR.rows, vacations: vacR.rows,
+    });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Errore server' }); }
+});
 
 // =====================
 // ROTTE PROTETTE
@@ -253,13 +306,14 @@ router.get('/notes', async (req, res) => {
 
 router.post('/notes', async (req, res) => {
   const { day, hour, content, note_date } = req.body;
+  const kind = normKind(req.body.kind);
   if (!content) return res.status(400).json({ error: 'Contenuto obbligatorio' });
   try {
     const r = await pool.query(
-      'INSERT INTO notes (user_id, day, hour, content, note_date) VALUES ($1,$2,$3,$4,$5) RETURNING id',
-      [req.user.id, day, hour, content, note_date || null]
+      'INSERT INTO notes (user_id, day, hour, content, note_date, kind, done) VALUES ($1,$2,$3,$4,$5,$6,FALSE) RETURNING id',
+      [req.user.id, day, hour, content, note_date || null, kind]
     );
-    await logChange(req.user.id, 'note_added', { day, hour, preview: content.slice(0, 40) });
+    await logChange(req.user.id, kind === 'note' ? 'note_added' : `${kind}_added`, { day, hour, preview: content.slice(0, 40) });
     res.json({ id: r.rows[0].id });
   } catch (e) { res.status(500).json({ error: 'Errore server' }); }
 });
@@ -342,13 +396,13 @@ router.get('/export', async (req, res) => {
     const [sR, slR, nR, subR, vacR] = await Promise.all([
       pool.query('SELECT * FROM user_settings WHERE user_id=$1', [req.user.id]),
       pool.query('SELECT day, hour, subject, color, slot_type FROM slots WHERE user_id=$1', [req.user.id]),
-      pool.query('SELECT day, hour, content, note_date FROM notes WHERE user_id=$1', [req.user.id]),
+      pool.query('SELECT day, hour, content, note_date, kind, done FROM notes WHERE user_id=$1', [req.user.id]),
       pool.query('SELECT day, hour, hour_to, substitute, sub_date, note FROM substitutions WHERE user_id=$1', [req.user.id]),
       pool.query('SELECT name, start_date, end_date, color FROM vacations WHERE user_id=$1 ORDER BY start_date', [req.user.id])
     ]);
     const s = sR.rows[0];
     res.json({
-      version: 3,
+      version: 4,
       exportedAt: new Date().toISOString(),
       settings: { schoolDays: JSON.parse(s?.school_days || '[]'), hoursPerDay: s?.hours_per_day || 6 },
       slots: slR.rows, notes: nR.rows, substitutions: subR.rows, vacations: vacR.rows
@@ -373,8 +427,8 @@ router.post('/import', async (req, res) => {
       await client.query('INSERT INTO slots (user_id,day,hour,subject,color,slot_type) VALUES ($1,$2,$3,$4,$5,$6)',
         [req.user.id, s.day, s.hour, s.subject, s.color, s.slot_type || 'subject']);
     for (const n of notes)
-      await client.query('INSERT INTO notes (user_id,day,hour,content,note_date) VALUES ($1,$2,$3,$4,$5)',
-        [req.user.id, n.day, n.hour, n.content, n.note_date || null]);
+      await client.query('INSERT INTO notes (user_id,day,hour,content,note_date,kind,done) VALUES ($1,$2,$3,$4,$5,$6,$7)',
+        [req.user.id, n.day, n.hour, n.content, n.note_date || null, normKind(n.kind), !!n.done]);
     for (const s of substitutions)
       await client.query('INSERT INTO substitutions (user_id,day,hour,hour_to,substitute,sub_date,note) VALUES ($1,$2,$3,$4,$5,$6,$7)',
         [req.user.id, s.day, s.hour, s.hour_to || s.hour, s.substitute, s.sub_date, s.note || '']);
@@ -396,10 +450,27 @@ router.put('/notes/:id', async (req, res) => {
   const { content, note_date } = req.body;
   if (!content) return res.status(400).json({ error: 'Contenuto obbligatorio' });
   try {
+    // kind opzionale: se assente resta quello attuale
+    const kind = req.body.kind === undefined ? null : normKind(req.body.kind);
     await pool.query(
-      'UPDATE notes SET content=$1, note_date=$2 WHERE id=$3 AND user_id=$4',
-      [content, note_date || null, req.params.id, req.user.id]
+      'UPDATE notes SET content=$1, note_date=$2, kind=COALESCE($3, kind) WHERE id=$4 AND user_id=$5',
+      [content, note_date || null, kind, req.params.id, req.user.id]
     );
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: 'Errore server' }); }
+});
+
+// Segna un compito/verifica come fatto (o non fatto)
+router.patch('/notes/:id/done', async (req, res) => {
+  try {
+    const done = !!req.body.done;
+    const r = await pool.query(
+      'UPDATE notes SET done=$1 WHERE id=$2 AND user_id=$3 RETURNING day, hour, kind, content',
+      [done, req.params.id, req.user.id]
+    );
+    if (r.rows[0]) await logChange(req.user.id, done ? 'task_done' : 'task_undone', {
+      day: r.rows[0].day, hour: r.rows[0].hour, kind: r.rows[0].kind, preview: r.rows[0].content.slice(0, 40)
+    });
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: 'Errore server' }); }
 });

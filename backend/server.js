@@ -2,25 +2,35 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+const { ALLOWED_ORIGINS } = require('./config');
 const { initDB } = require('./db/database');
 
 const app = express();
+app.set('trust proxy', 1); // dietro il proxy di Render: serve per avere l'IP reale
 
-app.use(cors({
-  origin: '*',
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-}));
-app.options('*', cors());
-app.use(express.json());
+// CORS: l'autenticazione usa un header Bearer (non cookie), ma limitiamo
+// comunque le origini quando ALLOWED_ORIGINS è configurata. Le richieste
+// senza header Origin (stesso dominio, curl, GitHub Action) passano sempre.
+if (!ALLOWED_ORIGINS.length) {
+  console.warn('⚠️  ALLOWED_ORIGINS non impostata: CORS aperto a tutte le origini. Impostala (es. https://tuo-sito.netlify.app).');
+}
+const corsOptions = {
+  origin(origin, cb) {
+    if (!origin || !ALLOWED_ORIGINS.length || ALLOWED_ORIGINS.includes(origin)) return cb(null, true);
+    cb(null, false);
+  },
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Share-Token'],
+};
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
+app.use(express.json({ limit: '1mb' }));
 
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/timetable', require('./routes/timetable'));
 app.use('/api/schedule', require('./routes/schedule'));
 
-// Endpoint leggero per verificare velocemente se il backend è raggiungibile,
-// senza dipendere dal database. Utile in futuro per un debug rapido
-// (es. https://TUO-BACKEND.onrender.com/api/health nella barra degli indirizzi).
+// Endpoint leggero per verificare se il backend è raggiungibile, senza DB.
 app.get('/api/health', (req, res) => res.json({ ok: true }));
 
 // Serve frontend in produzione
@@ -31,17 +41,8 @@ app.get('*', (req, res) => {
 
 const PORT = process.env.PORT || 3001;
 
-// FIX: prima il server si metteva in ascolto solo DOPO initDB(), e se il DB
-// non era raggiungibile l'intero processo usciva con process.exit(1).
-// Su Render questo genera un loop continuo di crash/restart: il servizio
-// non diventa mai "sano" e ogni richiesta del frontend resta appesa per
-// minuti prima di fallire, invece di ricevere subito un errore chiaro.
-//
-// Ora il server si avvia comunque; initDB() gira in background e, se fallisce,
-// logga l'errore ma NON termina il processo. Le singole route che usano il
-// database gestiscono già l'errore per conto proprio (routes/auth.js risponde
-// con status 500), quindi in caso di problemi al DB l'utente vede un errore
-// immediato invece di un timeout infinito.
+// Il server si avvia subito; initDB() gira in background e, se fallisce,
+// logga l'errore senza terminare il processo (evita crash-loop su Render).
 app.listen(PORT, () => console.log(`✅ Server su http://localhost:${PORT}`));
 
 initDB().catch(err => {

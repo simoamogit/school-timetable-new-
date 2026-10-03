@@ -95,7 +95,7 @@ export default function ShareView({ token }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           {totalNotes > 0 && (
             <span style={{ fontSize: 11, color: '#64748b' }}>
-              {totalNotes} note · {totalSubs} supplenze
+              {totalNotes} note e compiti · {totalSubs} supplenze
             </span>
           )}
           <span style={{ background: '#f1f5f9', border: '1px solid #e2e8f0',
@@ -113,7 +113,7 @@ export default function ShareView({ token }) {
       {/* Hint */}
       <div style={{ background: '#eff6ff', borderBottom: '1px solid #dbeafe',
         padding: '7px 20px', fontSize: 12, color: '#3b82f6', textAlign: 'center' }}>
-        Tocca una cella per vedere note e supplenze
+        Tocca una cella per vedere note, compiti e supplenze
       </div>
 
       {/* Griglia */}
@@ -288,7 +288,7 @@ export default function ShareView({ token }) {
                                       { weekday: 'short', day: '2-digit', month: 'short' })}
                                   </div>
                                 )}
-                                {n.content}
+                                {n.kind === 'test' ? '📝 Verifica: ' : n.kind === 'homework' ? '📚 Compito: ' : ''}{n.done ? <s>{n.content}</s> : n.content}
                               </div>
                             ))}
                           </div>

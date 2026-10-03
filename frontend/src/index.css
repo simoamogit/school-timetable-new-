@@ -47,6 +47,12 @@
   --on-warning: #FFFFFF;
   --warning-container: #FFDDB1;
   --on-warning-container: #2B1700;
+  --homework-container: #D6E3FF;
+  --on-homework-container: #001B3E;
+  --homework: #1F5FA8;
+  --test-container: #FFD9D2;
+  --on-test-container: #3A0905;
+  --test: #B3261E;
 
   --free: #006A68;
   --on-free: #FFFFFF;
@@ -177,6 +183,12 @@
   --on-warning: #482900;
   --warning-container: #673D00;
   --on-warning-container: #FFDDB1;
+  --homework-container: #1F3F66;
+  --on-homework-container: #D6E3FF;
+  --homework: #A8C8FF;
+  --test-container: #6B2018;
+  --on-test-container: #FFDAD4;
+  --test: #FFB4A9;
 
   --free: #7DD4CE;
   --on-free: #003735;
@@ -660,3 +672,32 @@ button {
   transition: background-color var(--motion-spatial-fast), color var(--motion-effects-fast);
 }
 .bottom-nav-item.active .bottom-nav-pill { background: var(--secondary-container); color: var(--on-secondary-container); }
+
+/* ── Compiti / verifiche ─────────────────────────────────────────── */
+.task-check {
+  width: 20px; height: 20px; min-width: 20px; min-height: 20px; padding: 0; flex-shrink: 0;
+  border-radius: 6px; border: 2px solid currentColor; background: transparent; color: inherit;
+  display: inline-flex; align-items: center; justify-content: center; cursor: pointer;
+}
+.task-check.on { background: currentColor; }
+.task-check.on .icon { color: var(--surface-container-lowest); }
+.kind-tag {
+  font-family: var(--mono); font-size: 9px; font-weight: 700; letter-spacing: 0.06em;
+  padding: 2px 6px; border-radius: var(--radius-xs); flex-shrink: 0;
+}
+.kind-tag.homework { background: var(--homework-container); color: var(--on-homework-container); }
+.kind-tag.test { background: var(--test-container); color: var(--on-test-container); }
+.kind-tag.note { background: var(--surface-container-highest); color: var(--text2); }
+.hdr-btn {
+  width: 34px; height: 34px; min-width: 34px; min-height: 34px; padding: 0; border: none;
+  border-radius: var(--radius-full); background: transparent; color: var(--text2);
+  display: inline-flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0;
+}
+.hdr-btn:hover { background: color-mix(in srgb, var(--text2) 10%, transparent); }
+.hdr-btn.active { background: var(--surface-container-lowest); color: var(--primary); box-shadow: var(--elevation-1); }
+
+.hdr-label { display: none; font-size: 12px; font-weight: 500; }
+@media (min-width: 900px) {
+  .hdr-btn.view { width: auto; padding: 0 12px; gap: 6px; }
+  .hdr-btn.view .hdr-label { display: inline; }
+}

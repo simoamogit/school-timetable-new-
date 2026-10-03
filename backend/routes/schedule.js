@@ -1,5 +1,6 @@
 const express = require('express');
 const { pool } = require('../db/database');
+const rateLimit = require('../middleware/rateLimit');
 
 const router = express.Router();
 
@@ -31,19 +32,16 @@ function todayIsoRome() {
   }).format(new Date());
 }
 
-// Queste due rotte sono pubbliche (nessun login): la dashboard esterna non ha
-// una sessione utente attiva, quindi non può mandare un Bearer token. Senza
-// JWT serve comunque un modo per capire DI CHI è l'orario da restituire:
-// ?username=xxx lo rende esplicito, altrimenti si assume il primo utente
-// registrato (va benissimo per un'app a singolo utente; se in futuro ce ne
-// sono più di uno, passa sempre ?username=).
+// Queste rotte NON usano il JWT (la dashboard esterna non ha una sessione), ma
+// non sono più aperte a chiunque: richiedono il token di condivisione
+// dell'utente (lo stesso del link /share/<token>, generato dalle Impostazioni
+// dell'app), passato come ?token=... oppure nell'header X-Share-Token.
+// Revocando il link di condivisione si revoca anche l'accesso della dashboard.
 async function resolveUserId(req) {
-  if (req.query.username) {
-    const r = await pool.query('SELECT id FROM users WHERE username=$1', [req.query.username]);
-    return r.rows[0]?.id || null;
-  }
-  const r = await pool.query('SELECT id FROM users ORDER BY id ASC LIMIT 1');
-  return r.rows[0]?.id || null;
+  const token = String(req.query.token || req.get('x-share-token') || '');
+  if (!/^[a-f0-9]{16,64}$/.test(token)) return null;
+  const r = await pool.query('SELECT user_id FROM share_tokens WHERE token=$1', [token]);
+  return r.rows[0]?.user_id || null;
 }
 
 async function loadContext(userId) {
@@ -51,7 +49,7 @@ async function loadContext(userId) {
     pool.query('SELECT school_days, hours_per_day, hidden_hours FROM user_settings WHERE user_id=$1', [userId]),
     pool.query('SELECT day, hour, subject, slot_type FROM slots WHERE user_id=$1', [userId]),
     pool.query('SELECT day, hour, hour_to, substitute, sub_date, note FROM substitutions WHERE user_id=$1', [userId]),
-    pool.query('SELECT day, hour, content, note_date FROM notes WHERE user_id=$1', [userId]),
+    pool.query('SELECT day, hour, content, note_date, kind, done FROM notes WHERE user_id=$1', [userId]),
     pool.query('SELECT name, start_date, end_date FROM vacations WHERE user_id=$1', [userId]),
   ]);
   const s = sR.rows[0] || {};
@@ -115,7 +113,10 @@ function buildDay(dateIso, ctx) {
       continue;
     }
 
-    const note = ctx.notes.find(n => n.day === dayName && n.hour === h && n.note_date === dateIso);
+    const dayNotes = ctx.notes.filter(n => n.day === dayName && n.hour === h && n.note_date === dateIso);
+    const note = dayNotes.find(n => (n.kind || 'note') === 'note');
+    const tasks = dayNotes.filter(n => (n.kind || 'note') !== 'note')
+      .map(n => ({ kind: n.kind, content: n.content, done: !!n.done }));
     events.push({
       hour: h,
       type: note ? 'note' : 'lesson',
@@ -123,6 +124,7 @@ function buildDay(dateIso, ctx) {
       room: null,
       teacher: null,
       note: note ? note.content : null,
+      tasks, // compiti e verifiche per questa ora (kind: 'homework' | 'test')
     });
   }
 
@@ -136,7 +138,7 @@ function buildDay(dateIso, ctx) {
 }
 
 // GET /api/schedule/today — pubblica, nessun login richiesto
-router.get('/today', async (req, res) => {
+router.get('/today', rateLimit({ max: 60 }), async (req, res) => {
   try {
     const userId = await resolveUserId(req);
     if (!userId) return res.status(404).json({ error: 'Utente non trovato' });
@@ -164,7 +166,7 @@ router.get('/today', async (req, res) => {
 });
 
 // GET /api/schedule/week — pubblica, settimana corrente Lunedì-Domenica
-router.get('/week', async (req, res) => {
+router.get('/week', rateLimit({ max: 60 }), async (req, res) => {
   try {
     const userId = await resolveUserId(req);
     if (!userId) return res.status(404).json({ error: 'Utente non trovato' });

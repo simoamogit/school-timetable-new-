@@ -1,5 +1,5 @@
 const jwt = require('jsonwebtoken');
-const SECRET = process.env.JWT_SECRET || 'school_super_secret_2024';
+const { JWT_SECRET } = require('../config');
 
 module.exports = (req, res, next) => {
   const authHeader = req.headers.authorization;
@@ -9,7 +9,7 @@ module.exports = (req, res, next) => {
   if (!token) return res.status(401).json({ error: 'Token mancante' });
 
   try {
-    req.user = jwt.verify(token, SECRET);
+    req.user = jwt.verify(token, JWT_SECRET);
     next();
   } catch {
     res.status(401).json({ error: 'Token non valido o scaduto' });

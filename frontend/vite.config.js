@@ -6,4 +6,11 @@ export default defineConfig({
   define: {
     'process.env': {},
   },
+  // In sviluppo le chiamate a /api vengono girate al backend locale (porta 3001),
+  // così non servono CORS né variabili d'ambiente lato frontend.
+  server: {
+    proxy: {
+      '/api': 'http://localhost:3001',
+    },
+  },
 });

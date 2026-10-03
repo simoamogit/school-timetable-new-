@@ -1,8 +1,16 @@
 const { Pool } = require('pg');
 
+// SSL attivo per qualunque database remoto (Supabase lo richiede anche in locale);
+// disattivato solo per un Postgres su localhost. Si può forzare con DATABASE_SSL=true|false.
+const dbUrl = process.env.DATABASE_URL || '';
+const isLocalDb = /@(localhost|127\.0\.0\.1|\[::1\])(:|\/|$)/.test(dbUrl);
+const useSsl = process.env.DATABASE_SSL
+  ? process.env.DATABASE_SSL === 'true'
+  : !isLocalDb;
+
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+  connectionString: dbUrl,
+  ssl: useSsl ? { rejectUnauthorized: false } : false,
   family: 4
 });
 
@@ -76,10 +84,21 @@ async function initDB() {
       `ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS hidden_hours TEXT DEFAULT '[]'`,
       `ALTER TABLE slots ADD COLUMN IF NOT EXISTS slot_type TEXT DEFAULT 'subject'`,
       `UPDATE substitutions SET hour_to = hour WHERE hour_to IS NULL`,
+      `ALTER TABLE notes ADD COLUMN IF NOT EXISTS kind TEXT DEFAULT 'note'`,
+      `ALTER TABLE notes ADD COLUMN IF NOT EXISTS done BOOLEAN DEFAULT FALSE`,
+      `UPDATE notes SET kind='note' WHERE kind IS NULL`,
       `CREATE TABLE IF NOT EXISTS vacations (id SERIAL PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id), name TEXT NOT NULL, start_date TEXT NOT NULL, end_date TEXT NOT NULL, color TEXT DEFAULT '#7c3aed', created_at TIMESTAMPTZ DEFAULT NOW())`,
     ];
     for (const m of migrations) {
       try { await client.query(m); } catch (_) { /* già presente */ }
+    }
+
+    // Supabase espone lo schema public via API REST con la chiave `anon`
+    // (pubblica). Senza RLS chiunque potrebbe leggere/scrivere queste tabelle,
+    // hash delle password compresi. RLS attiva e NESSUNA policy = l'API REST non
+    // vede nulla; il backend si collega come ruolo `postgres`, che bypassa l'RLS.
+    for (const t of ['users', 'user_settings', 'slots', 'notes', 'substitutions', 'change_log', 'share_tokens', 'vacations']) {
+      try { await client.query(`ALTER TABLE ${t} ENABLE ROW LEVEL SECURITY`); } catch (_) { /* tabella assente */ }
     }
 
     console.log('✅ Database inizializzato');

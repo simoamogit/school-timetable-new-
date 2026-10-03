@@ -1,4 +1,4 @@
-const CACHE = 'orario-v2';
+const CACHE = 'orario-v3';
 const PRECACHE = ['/', '/index.html'];
 
 self.addEventListener('install', e => {
@@ -32,6 +32,14 @@ self.addEventListener('fetch', e => {
           headers: { 'Content-Type': 'application/json' }
         })
       )
+    );
+    return;
+  }
+
+  // Navigazioni (index.html): network first, così dopo un deploy si vede subito la nuova versione
+  if (e.request.mode === 'navigate') {
+    e.respondWith(
+      fetch(e.request).catch(() => caches.match('/index.html'))
     );
     return;
   }

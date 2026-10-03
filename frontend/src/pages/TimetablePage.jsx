@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import api from '../api/index.js';
-import TodayView from './TodayView.jsx';
+import DayView from './DayView.jsx';
+import StatsPage from './StatsPage.jsx';
+import { todayIso, autoDayView, isSmallScreen, TASK_KINDS, isTask } from '../utils/dates.js';
 import DatePicker from '../components/DatePicker.jsx';
 import LoadingIndicator from '../components/LoadingIndicator.jsx';
 import TextField from '../components/TextField.jsx';
@@ -83,19 +85,23 @@ function TimetableCell({ day, hour, slot, cellNotes, cellSubs, isLocked, isDragO
   // vicina alla più lontana. Le note senza data (nessuna scadenza) finiscono
   // in fondo, dopo tutte quelle datate.
   const items = useMemo(() => {
-    const noteItems = cellNotes.map(n => ({ kind: 'note', date: n.note_date, data: n }));
+    // Compiti/verifiche già fatti non occupano più spazio nella cella.
+    const noteItems = cellNotes.filter(n => !(isTask(n) && n.done))
+      .map(n => ({ kind: isTask(n) ? 'task' : 'note', date: n.note_date, data: n }));
     const subItems = cellSubs.map(s => ({ kind: 'sub', date: s.sub_date, data: s }));
     return [...noteItems, ...subItems].sort((a, b) => {
-      if (a.date && b.date) return new Date(a.date) - new Date(b.date);
+      const rank = x => (x.kind === 'task' && x.data.kind === 'test' ? 0 : x.kind === 'task' ? 1 : 2);
+      if (a.date && b.date) return new Date(a.date) - new Date(b.date) || rank(a) - rank(b);
       if (a.date) return -1;
       if (b.date) return 1;
-      return 0;
+      return rank(a) - rank(b);
     });
   }, [cellNotes, cellSubs]);
 
   const [pagerIndex, setPagerIndex] = useState(0);
   const idx = items.length ? pagerIndex % items.length : 0;
   const current = items[idx];
+  const taskKind = current?.kind === 'task' ? current.data.kind : null;
 
   const changePage = (e, delta) => {
     e.stopPropagation();
@@ -154,8 +160,8 @@ function TimetableCell({ day, hour, slot, cellNotes, cellSubs, isLocked, isDragO
       {items.length > 0 && (
         <div style={{
           display: 'flex', alignItems: 'stretch', gap: 0,
-          background: current.kind === 'sub' ? 'var(--warning-container)' : 'var(--surface-container-high)',
-          color: current.kind === 'sub' ? 'var(--on-warning-container)' : 'var(--text2)',
+          background: current.kind === 'sub' ? 'var(--warning-container)' : taskKind ? `var(--${taskKind}-container)` : 'var(--surface-container-high)',
+          color: current.kind === 'sub' ? 'var(--on-warning-container)' : taskKind ? `var(--on-${taskKind}-container)` : 'var(--text2)',
           borderRadius: 'var(--radius-sm)', minHeight: 26,
         }}>
           <button
@@ -175,9 +181,9 @@ function TimetableCell({ day, hour, slot, cellNotes, cellSubs, isLocked, isDragO
           }}>
             <span style={{
               overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-              fontWeight: current.kind === 'sub' ? 700 : 500,
+              fontWeight: current.kind === 'sub' || taskKind ? 700 : 500,
             }}>
-              {current.kind === 'sub' ? current.data.substitute : current.data.content}
+              {current.kind === 'sub' ? current.data.substitute : `${taskKind ? TASK_KINDS[taskKind].label + ': ' : ''}${current.data.content}`}
             </span>
             {current.date && (
               <span style={{ fontSize: 7, opacity: 0.75, fontFamily: 'var(--mono)', flexShrink: 0 }}>
@@ -311,7 +317,7 @@ function VacationModal({ onClose, onSave, existing }) {
 
 // ─── CellModal ────────────────────────────────────────────────────────────────
 function CellModal({ cell, hours, isLocked, notes, substitutions, initialTab,
-  onClose, onSave, onDelete, onAddNote, onEditNote, onDeleteNote, onAddSub, onEditSub, onDeleteSub }) {
+  onClose, onSave, onDelete, onAddNote, onEditNote, onDeleteNote, onToggleTask, onAddSub, onEditSub, onDeleteSub }) {
   const confirmDialog = useConfirm();
 
   const [tab, setTab] = useState(initialTab || (isLocked ? 'notes' : 'edit'));
@@ -321,6 +327,8 @@ function CellModal({ cell, hours, isLocked, notes, substitutions, initialTab,
 
   const [noteContent, setNoteContent] = useState('');
   const [noteDate, setNoteDate] = useState('');
+  const [noteKind, setNoteKind] = useState('note');
+  const [editNoteKind, setEditNoteKind] = useState('note');
   const [editingNoteId, setEditingNoteId] = useState(null);
   const [editNoteContent, setEditNoteContent] = useState('');
   const [editNoteDate, setEditNoteDate] = useState('');
@@ -328,7 +336,7 @@ function CellModal({ cell, hours, isLocked, notes, substitutions, initialTab,
   const [subText, setSubText] = useState('');
   const [subHourFrom, setSubHourFrom] = useState(cell.hour);
   const [subHourTo, setSubHourTo] = useState(cell.hour);
-  const [subDate, setSubDate] = useState(new Date().toISOString().split('T')[0]);
+  const [subDate, setSubDate] = useState(todayIso());
   const [subNote, setSubNote] = useState('');
   const [editingSubId, setEditingSubId] = useState(null);
   const [editSub, setEditSub] = useState({});
@@ -357,7 +365,7 @@ function CellModal({ cell, hours, isLocked, notes, substitutions, initialTab,
 
   const addNote = async () => {
     if (!noteContent.trim()) return;
-    await onAddNote({ day: cell.day, hour: cell.hour, content: noteContent, note_date: noteDate || null });
+    await onAddNote({ day: cell.day, hour: cell.hour, content: noteContent, note_date: noteDate || null, kind: noteKind });
     setNoteContent(''); setNoteDate('');
   };
 
@@ -365,9 +373,10 @@ function CellModal({ cell, hours, isLocked, notes, substitutions, initialTab,
     setEditingNoteId(n.id);
     setEditNoteContent(n.content);
     setEditNoteDate(n.note_date || '');
+    setEditNoteKind(n.kind || 'note');
   };
   const saveEditNote = async () => {
-    await onEditNote(editingNoteId, { content: editNoteContent, note_date: editNoteDate || null });
+    await onEditNote(editingNoteId, { content: editNoteContent, note_date: editNoteDate || null, kind: editNoteKind });
     setEditingNoteId(null);
   };
 
@@ -388,7 +397,7 @@ function CellModal({ cell, hours, isLocked, notes, substitutions, initialTab,
 
   const tabs = [
     ...(isLocked ? [] : [{ id: 'edit', label: 'Materia', icon: 'edit' }]),
-    { id: 'notes', label: `Note${cellNotes.length ? ` (${cellNotes.length})` : ''}`, icon: 'sticky_note_2' },
+    { id: 'notes', label: `Note e compiti${cellNotes.length ? ` (${cellNotes.length})` : ''}`, icon: 'sticky_note_2' },
     { id: 'subs', label: `Supplenze${cellSubs.length ? ` (${cellSubs.length})` : ''}`, icon: 'swap_horiz' }
   ];
 
@@ -475,27 +484,39 @@ function CellModal({ cell, hours, isLocked, notes, substitutions, initialTab,
 
           {tab === 'notes' && (
             <div>
+              <div style={{ display: 'flex', gap: 6, marginBottom: 'var(--space-200)' }}>
+                {Object.entries(TASK_KINDS).map(([k, v]) => (
+                  <button key={k} onClick={() => setNoteKind(k)} className={noteKind === k ? 'btn-tonal' : 'btn-ghost'}
+                    style={{ flex: 1, padding: 9, fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                    <Icon name={v.icon} size={16} /> {v.label}
+                  </button>
+                ))}
+              </div>
               <div className="form-group">
-                <label className="label">Nuova nota</label>
-                <textarea placeholder="Nota per questa lezione..." value={noteContent}
+                <label className="label">{noteKind === 'note' ? 'Nuova nota' : `Nuov${noteKind === 'test' ? 'a' : 'o'} ${TASK_KINDS[noteKind].label.toLowerCase()}`}</label>
+                <textarea placeholder={noteKind === 'test' ? 'Cosa c\'è in programma...' : noteKind === 'homework' ? 'Cosa devi fare...' : 'Nota per questa lezione...'} value={noteContent}
                   onChange={e => setNoteContent(e.target.value)} rows={3}
                   style={{ resize: 'vertical' }} autoFocus={!isTouchDevice} />
               </div>
               <div className="form-group">
-                <label className="label">Data (eliminata il giorno dopo)</label>
+                <label className="label">{noteKind === 'note' ? 'Data (eliminata il giorno dopo)' : noteKind === 'test' ? 'Data della verifica' : 'Data di consegna'}</label>
                 <DatePicker value={noteDate} onChange={setNoteDate} placeholder="Nessuna scadenza" />
               </div>
               <button className="btn-primary" onClick={addNote} disabled={!noteContent.trim()}
                 style={{ width: '100%', marginBottom: 'var(--space-200)', padding: 12 }}>
-                Aggiungi nota
+                {noteKind === 'note' ? 'Aggiungi nota' : `Aggiungi ${TASK_KINDS[noteKind].label.toLowerCase()}`}
               </button>
 
               {cellNotes.length === 0
                 ? <div className="empty-state">Nessuna nota.</div>
                 : cellNotes.map(n => (
-                  <div key={n.id} className="note-card">
+                  <div key={n.id} className="note-card" style={isTask(n) ? {
+                    background: `var(--${n.kind}-container)`, color: `var(--on-${n.kind}-container)`, opacity: n.done ? 0.65 : 1 } : undefined}>
                     {editingNoteId === n.id ? (
                       <div style={{ width: '100%' }}>
+                        <select value={editNoteKind} onChange={e => setEditNoteKind(e.target.value)} style={{ marginBottom: 8 }}>
+                          {Object.entries(TASK_KINDS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+                        </select>
                         <textarea value={editNoteContent} onChange={e => setEditNoteContent(e.target.value)}
                           rows={2} style={{ resize: 'vertical', marginBottom: 8 }} />
                         <DatePicker value={editNoteDate} onChange={setEditNoteDate} placeholder="Nessuna scadenza" />
@@ -507,10 +528,18 @@ function CellModal({ cell, hours, isLocked, notes, substitutions, initialTab,
                         </div>
                       </div>
                     ) : (
-                      <div className="note-card-header" style={{ width: '100%' }}>
+                      <div className="note-card-header" style={{ width: '100%', alignItems: 'center' }}>
+                        {isTask(n) && (
+                          <button className={`task-check${n.done ? ' on' : ''}`} style={{ marginRight: 10 }}
+                            title={n.done ? 'Segna come da fare' : 'Segna come fatto'}
+                            onClick={() => onToggleTask(n.id, !n.done)}>
+                            {n.done && <span className="icon" style={{ fontSize: 14 }}>check</span>}
+                          </button>
+                        )}
                         <div style={{ flex: 1 }}>
-                          <p>{n.content}</p>
-                          {n.note_date && <span className="meta">{new Date(n.note_date).toLocaleDateString('it-IT')}</span>}
+                          {isTask(n) && <span className={`kind-tag ${n.kind}`}>{TASK_KINDS[n.kind].short}</span>}
+                          <p style={{ textDecoration: isTask(n) && n.done ? 'line-through' : 'none', marginTop: isTask(n) ? 4 : 0, color: 'inherit' }}>{n.content}</p>
+                          {n.note_date && <span className="meta">{new Date(n.note_date + 'T00:00:00').toLocaleDateString('it-IT')}</span>}
                         </div>
                         <div className="note-card-actions">
                           <button className="btn-edit" onClick={() => startEditNote(n)} title="Modifica">
@@ -874,7 +903,7 @@ function SettingsPanel({ onClose, onReset, onExport, onImport, isLocked, onToggl
               </div>
 
               {(() => {
-                const today = new Date().toISOString().split('T')[0];
+                const today = todayIso();
                 const filtered = vacFilter === 'upcoming'
                   ? vacations.filter(v => v.end_date >= today)
                   : vacations;
@@ -1030,16 +1059,23 @@ export default function TimetablePage({ user, onLogout, theme, onThemeChange, is
     return vacations.find(v => date >= v.start_date && date <= v.end_date) || null;
   }, [vacations, weekDates]);
   const [showSettings, setShowSettings] = useState(false);
-  const [view, setView] = useState(
-    () => (typeof window !== 'undefined' && window.innerWidth < 700) ? 'today' : 'week'
-  );
+  // Schermi piccoli: 05:00–14:00 apre "Oggi", il resto della giornata "Domani".
+  // Su schermi grandi si parte dall'orario settimanale.
+  const [view, setView] = useState(() => (isSmallScreen() ? autoDayView() : 'week'));
+  const userPickedView = useRef(false);
+  const chooseView = (v) => { userPickedView.current = true; setView(v); };
+  useEffect(() => {
+    // Se l'utente non ha scelto a mano, la vista segue l'orario (cambio alle 05:00 e alle 14:00).
+    const t = setInterval(() => {
+      if (userPickedView.current || !isSmallScreen()) return;
+      setView(v => (v === 'today' || v === 'tomorrow') ? autoDayView() : v);
+    }, 60000);
+    return () => clearInterval(t);
+  }, []);
   const [dragFrom, setDragFrom] = useState(null);
   const [dragOver, setDragOver] = useState(null);
   const [timetableHidden, setTimetableHidden] = useState(
     () => localStorage.getItem('timetable_hidden') === '1'
-  );
-  const [statsHidden, setStatsHidden] = useState(
-    () => localStorage.getItem('stats_hidden') === '1'
   );
   const [extraHours, setExtraHours] = useState(
     () => parseInt(localStorage.getItem('extra_hours') || '0')
@@ -1127,13 +1163,22 @@ export default function TimetablePage({ user, onLogout, theme, onThemeChange, is
 
   const handleAddNote = async (data) => {
     const res = await api.post('/timetable/notes', data);
-    setNotes(prev => [...prev, { ...data, id: res.data.id, created_at: new Date().toISOString() }]);
-    showSnackbar('Nota aggiunta');
+    setNotes(prev => [...prev, { ...data, kind: data.kind || 'note', done: false, id: res.data.id, created_at: new Date().toISOString() }]);
+    showSnackbar(data.kind === 'test' ? 'Verifica aggiunta' : data.kind === 'homework' ? 'Compito aggiunto' : 'Nota aggiunta');
   };
 
   const handleEditNote = async (id, data) => {
     await api.put(`/timetable/notes/${id}`, data);
     setNotes(prev => prev.map(n => n.id === id ? { ...n, ...data } : n));
+  };
+
+  const handleToggleTask = async (id, done) => {
+    setNotes(prev => prev.map(n => n.id === id ? { ...n, done } : n)); // ottimistico
+    try { await api.patch(`/timetable/notes/${id}/done`, { done }); }
+    catch {
+      setNotes(prev => prev.map(n => n.id === id ? { ...n, done: !done } : n));
+      showSnackbar('Errore nel salvataggio');
+    }
   };
 
   const handleDeleteNote = async (id) => {
@@ -1185,8 +1230,11 @@ export default function TimetablePage({ user, onLogout, theme, onThemeChange, is
 
   const toggleLock = async () => {
     const nl = !isLocked;
-    await api.post('/timetable/settings/lock', { locked: nl });
-    setIsLocked(nl);
+    try {
+      await api.post('/timetable/settings/lock', { locked: nl });
+      setIsLocked(nl);
+      showSnackbar(nl ? 'Orario bloccato' : 'Orario sbloccato');
+    } catch { showSnackbar('Errore nel cambio di stato'); }
   };
 
   const resetSetup = async () => {
@@ -1209,12 +1257,6 @@ export default function TimetablePage({ user, onLogout, theme, onThemeChange, is
     const v = !timetableHidden;
     setTimetableHidden(v);
     localStorage.setItem('timetable_hidden', v ? '1' : '0');
-  };
-
-  const toggleStatsHidden = () => {
-    const v = !statsHidden;
-    setStatsHidden(v);
-    localStorage.setItem('stats_hidden', v ? '1' : '0');
   };
 
   const handleExport = async () => {
@@ -1271,7 +1313,6 @@ export default function TimetablePage({ user, onLogout, theme, onThemeChange, is
   const allHoursExtended = Array.from({ length: maxHour }, (_, i) => i + 1);
   const hours = allHoursExtended.filter(h => !hiddenHours.includes(h));
   const days = settings?.schoolDays || [];
-  const filledSlots = slots.filter(s => s.subject && s.subject.trim() !== '' && s.slot_type !== 'free');
 
   const addExtraHour = () => { const v = extraHours + 1; setExtraHours(v); localStorage.setItem('extra_hours', v); setFabOpen(false); };
   const removeExtraHour = () => { const v = extraHours - 1; setExtraHours(v); localStorage.setItem('extra_hours', v); setFabOpen(false); };
@@ -1283,22 +1324,20 @@ export default function TimetablePage({ user, onLogout, theme, onThemeChange, is
           dipendere dal contenitore di scroll di una pagina o di un antenato */}
       <header style={{
         background: 'var(--surface-container)', borderBottom: '1px solid var(--border)',
-        padding: '0 var(--space-200)', height: 'var(--header-h)',
+        padding: '0 8px', height: 'var(--header-h)', gap: 4,
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        position: 'fixed', top: 0, left: 0, right: 0, zIndex: 50
+        position: 'fixed', top: 0, left: 0, right: 0, zIndex: 50, overflowX: 'auto'
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <span style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--text3)', letterSpacing: '0.1em' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 2, flexShrink: 0 }}>
+          <span style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--text3)', letterSpacing: '0.1em', padding: '0 6px' }}>
             ORARIO
           </span>
-          {isLocked && (
-            <span style={{
-              fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--on-warning-container)',
-              background: 'var(--warning-container)', padding: '2px 6px', borderRadius: 'var(--radius-xs)'
-            }}>
-              BLOCCATO
-            </span>
-          )}
+          <button className="hdr-btn" onClick={toggleLock}
+            title={isLocked ? 'Orario bloccato — tocca per sbloccare' : 'Orario sbloccato — tocca per bloccare'}
+            aria-label={isLocked ? 'Orario bloccato' : 'Orario sbloccato'}
+            style={{ color: isLocked ? 'var(--warning)' : 'var(--text2)' }}>
+            <Icon name={isLocked ? 'lock' : 'lock_open'} size={20} filled={isLocked} />
+          </button>
           {!isOnline && (
             <span style={{
               fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--on-error-container)',
@@ -1309,36 +1348,37 @@ export default function TimetablePage({ user, onLogout, theme, onThemeChange, is
           )}
         </div>
 
-        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: 2, alignItems: 'center', flexShrink: 0 }}>
           <div style={{
             display: 'flex', background: 'var(--surface-container-highest)', borderRadius: 'var(--radius-full)',
-            padding: 3, gap: 2,
+            padding: 2, gap: 1,
           }}>
-            {[{ v: 'week', l: 'Sett.' }, { v: 'today', l: 'Domani' }].map(opt => (
-              <button key={opt.v} onClick={() => setView(opt.v)}
-                style={{
-                  padding: '5px 14px', fontSize: 12, fontWeight: 500, border: 'none', borderRadius: 'var(--radius-full)',
-                  background: view === opt.v ? 'var(--surface-container-lowest)' : 'transparent',
-                  color: view === opt.v ? 'var(--primary)' : 'var(--text2)',
-                  transition: `background-color var(--motion-spatial-fast), color var(--motion-effects-fast)`,
-                  boxShadow: view === opt.v ? 'var(--elevation-1)' : 'none',
-                }}>
-                {opt.l}
+            {[
+              { v: 'week', l: 'Settimana', icon: 'calendar_view_week' },
+              { v: 'today', l: 'Oggi', icon: 'today' },
+              { v: 'tomorrow', l: 'Domani', icon: 'event' },
+              { v: 'stats', l: 'Statistiche', icon: 'bar_chart' },
+            ].map(opt => (
+              <button key={opt.v} className={`hdr-btn view${view === opt.v ? ' active' : ''}`}
+                onClick={() => chooseView(opt.v)} title={opt.l} aria-label={opt.l} aria-pressed={view === opt.v}>
+                <Icon name={opt.icon} size={20} filled={view === opt.v} />
+                <span className="hdr-label">{opt.l}</span>
               </button>
             ))}
           </div>
 
-          <button className="btn-icon" onClick={toggleTimetableHidden}
-            title={timetableHidden ? 'Mostra orario' : 'Nascondi orario'}
+          <button className="hdr-btn" onClick={toggleTimetableHidden}
+            title={timetableHidden ? 'Mostra tabella' : 'Nascondi tabella'}
+            aria-label={timetableHidden ? 'Mostra tabella' : 'Nascondi tabella'}
             style={{ color: timetableHidden ? 'var(--primary)' : 'var(--text2)' }}>
             <Icon name={timetableHidden ? 'visibility_off' : 'visibility'} />
           </button>
 
-          <button onClick={() => setShowSettings(true)}
+          <button onClick={() => setShowSettings(true)} title="Impostazioni e profilo" aria-label="Impostazioni e profilo"
             style={{
-              display: 'flex', alignItems: 'center', gap: 8,
+              display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0,
               background: 'var(--surface-container-highest)', border: 'none',
-              borderRadius: 'var(--radius-full)', padding: '4px 10px 4px 4px', cursor: 'pointer'
+              borderRadius: 'var(--radius-full)', padding: '3px 8px 3px 3px', cursor: 'pointer'
             }}>
             <div style={{
               width: 26, height: 26, borderRadius: '50%', background: avatarColor,
@@ -1352,52 +1392,9 @@ export default function TimetablePage({ user, onLogout, theme, onThemeChange, is
         </div>
       </header>
 
-      {!statsHidden && (
-        <div style={{
-          borderBottom: '1px solid var(--border)', padding: '7px var(--space-200)',
-          display: 'flex', gap: 20, background: 'var(--surface-container-low)', overflowX: 'auto',
-          alignItems: 'center'
-        }}>
-          {[
-            { label: 'giorni', value: days.length },
-            { label: 'ore', value: filledSlots.length },
-            { label: 'materie', value: new Set(filledSlots.map(s => s.subject)).size },
-            { label: 'note', value: notes.length },
-            { label: 'supplenze', value: substitutions.length },
-          ].map(s => (
-            <div key={s.label} style={{ display: 'flex', alignItems: 'baseline', gap: 4, flexShrink: 0 }}>
-              <span style={{ fontFamily: 'var(--mono)', fontSize: 15, fontWeight: 600, color: 'var(--primary)' }}>{s.value}</span>
-              <span style={{ fontSize: 11, color: 'var(--text3)' }}>{s.label}</span>
-            </div>
-          ))}
-          <button onClick={toggleStatsHidden}
-            style={{
-              marginLeft: 'auto', flexShrink: 0, background: 'transparent',
-              border: 'none', color: 'var(--text3)', fontSize: 11, cursor: 'pointer',
-              fontFamily: 'var(--mono)', padding: '2px 6px'
-            }}>
-            nascondi
-          </button>
-        </div>
-      )}
-
-      {statsHidden && (
-        <div style={{
-          padding: '4px var(--space-200)', background: 'var(--surface-container-low)',
-          borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end'
-        }}>
-          <button onClick={toggleStatsHidden}
-            style={{
-              background: 'transparent', border: 'none', color: 'var(--text3)',
-              fontSize: 11, cursor: 'pointer', fontFamily: 'var(--mono)', padding: '2px 6px'
-            }}>
-            mostra statistiche
-          </button>
-        </div>
-      )}
-
-      {view === 'today' ? (
-        <TodayView
+      {view === 'today' || view === 'tomorrow' ? (
+        <DayView
+          mode={view}
           settings={settings}
           slots={slots}
           notes={notes}
@@ -1406,6 +1403,17 @@ export default function TimetablePage({ user, onLogout, theme, onThemeChange, is
           isLocked={isLocked}
           onOpenCell={openCell}
           extraHours={extraHours}
+          onToggleTask={handleToggleTask}
+        />
+      ) : view === 'stats' ? (
+        <StatsPage
+          settings={settings}
+          slots={slots}
+          notes={notes}
+          substitutions={substitutions}
+          vacations={vacations}
+          hiddenHours={hiddenHours}
+          onToggleTask={handleToggleTask}
         />
       ) : timetableHidden ? (
         <div style={{
@@ -1575,6 +1583,7 @@ export default function TimetablePage({ user, onLogout, theme, onThemeChange, is
           onAddNote={handleAddNote}
           onEditNote={handleEditNote}
           onDeleteNote={handleDeleteNote}
+          onToggleTask={handleToggleTask}
           onAddSub={handleAddSub}
           onEditSub={handleEditSub}
           onDeleteSub={handleDeleteSub}

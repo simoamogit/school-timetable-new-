@@ -4,7 +4,7 @@ const jwt = require('jsonwebtoken');
 const { pool } = require('../db/database');
 
 const router = express.Router();
-const SECRET = process.env.JWT_SECRET || 'school_super_secret_2024';
+const { JWT_SECRET: SECRET } = require('../config');
 
 // REGISTRAZIONE
 router.post('/register', async (req, res) => {
