@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import api from '../api/index.js';
 import DayView from './DayView.jsx';
 import StatsPage from './StatsPage.jsx';
+import QuickAddModal from '../components/QuickAddModal.jsx';
 import { todayIso, autoDayView, isSmallScreen, TASK_KINDS, isTask } from '../utils/dates.js';
 import DatePicker from '../components/DatePicker.jsx';
 import LoadingIndicator from '../components/LoadingIndicator.jsx';
@@ -1081,6 +1082,7 @@ export default function TimetablePage({ user, onLogout, theme, onThemeChange, is
     () => parseInt(localStorage.getItem('extra_hours') || '0')
   );
   const [fabOpen, setFabOpen] = useState(false);
+  const [quickAdd, setQuickAdd] = useState(null); // null | 'note' | 'homework' | 'test'
   const fileInputRef = useRef(null);
 
   const load = useCallback(async () => {
@@ -1120,7 +1122,7 @@ export default function TimetablePage({ user, onLogout, theme, onThemeChange, is
     const handler = (e) => {
       const tag = e.target.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
-      if (e.key === 'Escape') { setSelectedCell(null); setShowSettings(false); setFabOpen(false); }
+      if (e.key === 'Escape') { setSelectedCell(null); setShowSettings(false); setFabOpen(false); setQuickAdd(null); }
       if (selectedCell && (e.key === 'n' || e.key === 'N')) setModalInitialTab('notes');
       if (selectedCell && (e.key === 's' || e.key === 'S')) setModalInitialTab('subs');
     };
@@ -1551,6 +1553,15 @@ export default function TimetablePage({ user, onLogout, theme, onThemeChange, is
           }}>
             {maxHour} ORE {extraHours > 0 && `(+${extraHours} extra)`}
           </div>
+          {['test', 'homework', 'note'].map(k => (
+            <button key={k} className="fab-menu-item" onClick={() => { setFabOpen(false); setQuickAdd(k); }}>
+              <span className="icon-circle" style={k === 'note' ? undefined : {
+                background: `var(--${k}-container)`, color: `var(--on-${k}-container)` }}>
+                <Icon name={TASK_KINDS[k].icon} size={18} />
+              </span>
+              Aggiungi {TASK_KINDS[k].label.toLowerCase()}
+            </button>
+          ))}
           {maxHour < 10 && (
             <button className="fab-menu-item" onClick={addExtraHour}>
               <span className="icon-circle"><Icon name="add" size={18} /></span>
@@ -1565,9 +1576,20 @@ export default function TimetablePage({ user, onLogout, theme, onThemeChange, is
           )}
         </div>
       )}
-      <button className={`fab${fabOpen ? ' open' : ''}`} onClick={() => setFabOpen(o => !o)} title="Gestisci ore">
+      <button className={`fab${fabOpen ? ' open' : ''}`} onClick={() => setFabOpen(o => !o)} title="Aggiungi" aria-label="Aggiungi">
         <Icon name="add" size={26} />
       </button>
+
+      {quickAdd && (
+        <QuickAddModal
+          initialKind={quickAdd}
+          schoolDays={days}
+          hours={hours}
+          slots={slots}
+          onClose={() => setQuickAdd(null)}
+          onAdd={handleAddNote}
+        />
+      )}
 
       {selectedCell && (
         <CellModal
