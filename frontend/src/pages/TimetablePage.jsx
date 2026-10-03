@@ -3,6 +3,7 @@ import api from '../api/index.js';
 import DayView from './DayView.jsx';
 import StatsPage from './StatsPage.jsx';
 import QuickAddModal from '../components/QuickAddModal.jsx';
+import DetailsModal from '../components/DetailsModal.jsx';
 import { todayIso, autoDayView, isSmallScreen, TASK_KINDS, isTask } from '../utils/dates.js';
 import DatePicker from '../components/DatePicker.jsx';
 import LoadingIndicator from '../components/LoadingIndicator.jsx';
@@ -78,7 +79,7 @@ function ClockWidget() {
 
 // ─── TimetableCell ────────────────────────────────────────────────────────────
 function TimetableCell({ day, hour, slot, cellNotes, cellSubs, isLocked, isDragOver, isDragging,
-  vacation, onClick, onDragStart, onDragOver, onDragLeave, onDrop }) {
+  vacation, onExpand, onClick, onDragStart, onDragOver, onDragLeave, onDrop }) {
   const isEmpty = !slot?.subject && slot?.slot_type !== 'free';
   const isFree = slot?.slot_type === 'free';
 
@@ -176,8 +177,8 @@ function TimetableCell({ day, hour, slot, cellNotes, cellSubs, isLocked, isDragO
             <Icon name="chevron_left" size={13} />
           </button>
 
-          <span style={{
-            flex: 1, fontSize: 9, textAlign: 'center', overflow: 'hidden', minWidth: 0,
+          <span title="Tocca per ingrandire" onClick={e => { e.stopPropagation(); onExpand?.(); }} style={{
+            flex: 1, fontSize: 9, textAlign: 'center', overflow: 'hidden', minWidth: 0, cursor: onExpand ? 'zoom-in' : 'inherit',
             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 3,
           }}>
             <span style={{
@@ -1082,6 +1083,7 @@ export default function TimetablePage({ user, onLogout, theme, onThemeChange, is
     () => parseInt(localStorage.getItem('extra_hours') || '0')
   );
   const [fabOpen, setFabOpen] = useState(false);
+  const [details, setDetails] = useState(null); // { day, hour, iso } vista ingrandita
   const [quickAdd, setQuickAdd] = useState(null); // null | 'note' | 'homework' | 'test'
   const fileInputRef = useRef(null);
 
@@ -1122,7 +1124,7 @@ export default function TimetablePage({ user, onLogout, theme, onThemeChange, is
     const handler = (e) => {
       const tag = e.target.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
-      if (e.key === 'Escape') { setSelectedCell(null); setShowSettings(false); setFabOpen(false); setQuickAdd(null); }
+      if (e.key === 'Escape') { setSelectedCell(null); setShowSettings(false); setFabOpen(false); setQuickAdd(null); setDetails(null); }
       if (selectedCell && (e.key === 'n' || e.key === 'N')) setModalInitialTab('notes');
       if (selectedCell && (e.key === 's' || e.key === 'S')) setModalInitialTab('subs');
     };
@@ -1406,6 +1408,7 @@ export default function TimetablePage({ user, onLogout, theme, onThemeChange, is
           onOpenCell={openCell}
           extraHours={extraHours}
           onToggleTask={handleToggleTask}
+          onExpand={(day, hour, iso) => setDetails({ day, hour, iso })}
         />
       ) : view === 'stats' ? (
         <StatsPage
@@ -1524,6 +1527,7 @@ export default function TimetablePage({ user, onLogout, theme, onThemeChange, is
                       isDragOver={isOver}
                       isDragging={isDragging}
                       vacation={getVacationForDay(day)}
+                      onExpand={() => setDetails({ day, hour, iso: null })}
                       onClick={() => openCell(day, hour)}
                       onDragStart={() => setDragFrom({ day, hour })}
                       onDragOver={() => setDragOver({ day, hour })}
@@ -1579,6 +1583,16 @@ export default function TimetablePage({ user, onLogout, theme, onThemeChange, is
       <button className={`fab${fabOpen ? ' open' : ''}`} onClick={() => setFabOpen(o => !o)} title="Aggiungi" aria-label="Aggiungi">
         <Icon name="add" size={26} />
       </button>
+
+      {details && (
+        <DetailsModal
+          day={details.day} hour={details.hour} iso={details.iso}
+          slots={slots} notes={notes} substitutions={substitutions}
+          onClose={() => setDetails(null)}
+          onToggleTask={handleToggleTask}
+          onEdit={() => { const { day, hour } = details; setDetails(null); openCell(day, hour); }}
+        />
+      )}
 
       {quickAdd && (
         <QuickAddModal

@@ -9,7 +9,7 @@ function hourLabel(h) {
 
 // Vista di un singolo giorno: mode='today' (oggi) oppure 'tomorrow' (domani).
 export default function DayView({ mode = 'tomorrow', settings, slots, notes, substitutions, vacations = [],
-  isLocked, onOpenCell, extraHours = 0, onToggleTask }) {
+  isLocked, onOpenCell, extraHours = 0, onToggleTask, onExpand }) {
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 60000);
@@ -84,6 +84,7 @@ export default function DayView({ mode = 'tomorrow', settings, slots, notes, sub
             const hasSub = !!latestSub;
             const isFree = slot?.slot_type === 'free';
             const isEmpty = !slot?.subject && !isFree;
+            const canExpand = !!onExpand && (cellNotes.length > 0 || hasSub);
             const isCurrent = isToday && !activeVacation && nowHour === 7 + hour;
 
             const cardBg = hasSub ? 'var(--warning-container)'
@@ -116,8 +117,17 @@ export default function DayView({ mode = 'tomorrow', settings, slots, notes, sub
                   outline: isCurrent ? '2px solid var(--primary)' : 'none', outlineOffset: -2,
                 }}>
                   {isCurrent && (
-                    <span style={{ position: 'absolute', top: 8, right: 10, fontFamily: 'var(--mono)', fontSize: 9,
+                    <span style={{ position: 'absolute', top: 8, right: canExpand ? 46 : 10, fontFamily: 'var(--mono)', fontSize: 9,
                       fontWeight: 700, letterSpacing: '0.08em', color: 'var(--primary)' }}>● IN CORSO</span>
+                  )}
+                  {canExpand && (
+                    <button onClick={e => { e.stopPropagation(); onExpand(name, hour, iso); }}
+                      title="Ingrandisci" aria-label="Ingrandisci dettagli"
+                      style={{ position: 'absolute', top: 4, right: 6, width: 34, height: 34, minWidth: 0, minHeight: 0, padding: 0,
+                        border: 'none', borderRadius: '50%', background: 'transparent', color: 'inherit', opacity: 0.8,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', zIndex: 1 }}>
+                      <span className="icon" style={{ fontSize: 20 }}>open_in_full</span>
+                    </button>
                   )}
                   {!isEmpty && !isFree && !hasSub && slot?.color && (
                     <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 4, background: slot.color }} />
@@ -149,8 +159,8 @@ export default function DayView({ mode = 'tomorrow', settings, slots, notes, sub
                         const task = isTask(n);
                         const kind = n.kind || 'note';
                         return (
-                          <div key={n.id} onClick={e => task && e.stopPropagation()} style={{
-                            fontSize: 12, lineHeight: 1.5, borderRadius: 'var(--radius-xs)', padding: '5px 8px',
+                          <div key={n.id} onClick={e => { e.stopPropagation(); onExpand ? onExpand(name, hour, iso) : onOpenCell(name, hour); }} style={{
+                            cursor: 'zoom-in', fontSize: 12, lineHeight: 1.5, borderRadius: 'var(--radius-xs)', padding: '5px 8px',
                             display: 'flex', alignItems: 'center', gap: 8,
                             background: task ? `var(--${kind}-container)` : 'var(--surface-container-lowest)',
                             color: task ? `var(--on-${kind}-container)` : 'var(--text2)',
